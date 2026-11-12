@@ -1,0 +1,39 @@
+--- a/reader.html
++++ b/reader.html
+@@ -49,6 +49,12 @@
+     background: var(--bar); flex: 0 0 auto; overflow-x: auto; border-top: 1px solid #8882;
+   }
+   .tool.on { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
++  /* an icon, and a word beside it where there is one. A button keeps its
++     width and its one line: the bar scrolls sideways before a button is
++     squeezed into a stack of single words. */
++  .tools .tool { flex: 0 0 auto; white-space: nowrap; }
++  .tool svg { vertical-align: -3px; }
++  .tool svg + span { margin-left: .3rem; }
+   .tools .sep { width: 1px; height: 1.4rem; background: #8883; flex: 0 0 auto; }
+   /* what a tap picks out, offered only while it means something */
+   .grain { display: flex; gap: .25rem; }
+@@ -306,9 +312,9 @@
+     </button>
+   </span>
+   <span class="sep"></span>
+-  <button class="tool" id="zoom-out" type="button">&minus;</button>
++  <button class="tool" id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5M8 10.5h5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+   <span class="hint" id="zoom-label">fit</span>
+-  <button class="tool" id="zoom-in" type="button">+</button>
++  <button class="tool" id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5M8 10.5h5M10.5 8v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+   <span class="sep"></span>
+   <span class="grain" id="shows">
+     <button class="tool on" data-show="past" type="button"
+@@ -319,8 +325,9 @@
+   <span class="sep"></span>
+   <button class="tool" id="ink-save" type="button" hidden>Keep the ink as a note</button>
+   <button class="tool" id="ink-undo" type="button" hidden
+-          title="Take back the last stroke or rub-out">Undo</button>
+-  <button class="tool" id="ink-clear" type="button" hidden>Clear</button>
++          title="Take back the last stroke or rub-out"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 7H15a5 5 0 0 1 0 10H8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 4 8.5 7 12 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Undo</span></button>
++  <button class="tool" id="ink-clear" type="button" hidden
++          title="Take the ink off the page"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Clear</span></button>
+   <span class="hint" id="hint">Read: scroll and pinch as usual</span>
+ </div>
+ 

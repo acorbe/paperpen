@@ -1,0 +1,157 @@
+diff --git a/reader.html b/reader.html
+index 56cc563..8eacb7f 100644
+--- a/reader.html
++++ b/reader.html
+@@ -149,6 +149,14 @@
+   .fx-badge { flex: 0 0 auto; font-size: .66rem; font-weight: 700; color: #fff;
+               border-radius: 4px; padding: .1rem .4rem; background: #1f7a4d; }
+   .fx-badge.failed { background: var(--pen); }
++  .fx-undo { flex: 0 0 auto; border: 1px solid #8884; border-radius: 8px; padding: .35rem .75rem;
++             background: var(--paper); color: var(--ink); font: inherit; font-size: .78rem;
++             cursor: pointer; touch-action: manipulation; }
++  /* the agent, and what is waiting to be committed, in the header */
++  .agent-said { font-size: .74rem; color: var(--muted); }
++  .agent-said.running { color: var(--accent); font-weight: 600; }
++  .agent-said.failed { color: var(--pen); }
++  .agent-said a { color: inherit; }
+   .fx-problem { font-size: .72rem; color: var(--pen); margin-top: .25rem; }
+   .fx-msg { font-size: .8rem; line-height: 1.4; padding: .4rem .6rem; border-radius: 9px;
+             background: var(--bg); max-width: 92%; }
+@@ -344,6 +352,15 @@
+      title="Write the source, with the build beside it">Edit</a>
+   <a class="chip" id="fixes-chip" href="/paper/{pid}/feedback" hidden
+      title="Every fix proposed for this paper's notes, to choose from">Fixes</a>
++  <span class="agent-said" id="agent-said" hidden></span>
++  <button id="ask-agent" type="button" hidden
++          title="claude answers the newest round: applies what leaves no choice, proposes the rest">Ask claude</button>
++  <button id="commit" type="button" hidden
++          title="Commit what the applied fixes changed, and nothing else">Commit</button>
++  <button id="commit-branch" type="button" hidden
++          title="The same, on a branch of its own, to be taken or dropped">on a branch</button>
++  <button id="take" type="button" hidden title="Merge this review branch into the one it came from">Take it</button>
++  <button id="drop" type="button" hidden title="Go back to where this branch came from, and delete it">Drop it</button>
+   <button id="rebuild" type="button">Rebuild</button>
+   <button class="go" id="finish" type="button">Finish and send</button>
+ </header>
+@@ -1478,6 +1495,11 @@ function showFixes(note) {
+       top.append(use);
+     } else if (fix.state === 'applied') {
+       top.append(fxMake('span', 'fx-badge', 'applied'));
++      const back = fxMake('button', 'fx-undo', 'Undo');
++      back.type = 'button';
++      back.title = 'take this fix back out of the source; the note opens again';
++      back.onclick = () => undoFix(note, fix, back);
++      top.append(back);
+     } else if (fix.state === 'failed') {
+       top.append(fxMake('span', 'fx-badge failed', 'did not apply'));
+     }
+@@ -1560,6 +1582,77 @@ function replyTo(note, input, button) {
+     .finally(() => { button.disabled = false; });
+ }
+ 
++function undoFix(note, fix, button) {
++  button.disabled = true;
++  postJSON('/paper/' + PID + '/feedback/undo', {note: note.id, fix: fix.id})
++    .then(data => {
++      if (!data.ok) throw new Error(data.error || 'unknown error');
++      toast('Taken back out; the note is open again.');
++      return load().then(() => {
++        const again = allNotes().find(n => n.id === note.id);
++        if (again) openNote(again);
++      });
++    })
++    .catch(err => { toast('Not undone: ' + err.message, 6000); button.disabled = false; });
++}
++
++// --- the agent, and what is waiting to be committed -------------------------
++// What claude is doing with the round, said in the header while it does it,
++// and the review's commit one tap away: on the branch you are on, or on one
++// of its own, to be taken or dropped.
++let agentPoll = null;
++
++function showAgentAndCommit() {
++  const said = document.getElementById('agent-said');
++  const ask = document.getElementById('ask-agent');
++  const a = (META && META.agent) || {};
++  const r = (META && META.review) || {};
++  said.hidden = !a.state;
++  said.className = 'agent-said ' + (a.state || '');
++  if (a.state === 'running') {
++    said.textContent = 'claude is answering the round of ' + a.round + '…';
++  } else if (a.state === 'failed') {
++    said.textContent = 'claude could not answer: ' + (a.said || 'see its log');
++  } else if (a.state === 'done') {
++    said.textContent = 'claude answered the round of ' + a.round
++      + (a.branch ? ', on ' + a.branch : '');
++  } else if (a.state === 'stopped') {
++    said.textContent = 'claude was stopped';
++  }
++  // someone to ask, and something to ask about: a sent note nobody has answered
++  const answers = (META && META.feedback) || {};
++  const unanswered = ((META && META.past) || []).some(n => !answered(n) && !answers[n.id]);
++  ask.hidden = !(a.mode && a.mode !== 'off' && a.state !== 'running' && unanswered);
++  ask.textContent = a.state && a.state !== 'running' ? 'Ask claude again' : 'Ask claude';
++
++  const n = r.to_commit || 0;
++  document.getElementById('commit').hidden = !n || r.review_branch;
++  document.getElementById('commit').textContent = 'Commit (' + n + ' note' + (n === 1 ? '' : 's') + ')';
++  document.getElementById('commit-branch').hidden = !n || r.review_branch;
++  document.getElementById('take').hidden = !r.review_branch;
++  document.getElementById('drop').hidden = !r.review_branch;
++  if (r.review_branch) {
++    document.getElementById('take').textContent = 'Take ' + r.branch;
++    if (n) {
++      document.getElementById('commit').hidden = false;    // more fixes on the branch
++    }
++  }
++  clearTimeout(agentPoll);
++  if (a.state === 'running') agentPoll = setTimeout(load, 10000);
++}
++
++function headerCall(url, body, done, button) {
++  button.disabled = true;
++  postJSON(url, body)
++    .then(data => {
++      if (!data.ok) throw new Error(data.error || 'unknown error');
++      toast(done(data), 6000);
++      return load();
++    })
++    .catch(err => toast(err.message, 6000))
++    .finally(() => { button.disabled = false; });
++}
++
+ function closeSheet() {
+   document.getElementById('quick-save').hidden = true;
+   document.getElementById('sheet').hidden = true;
+@@ -2171,6 +2264,23 @@ document.getElementById('ink-clear').onclick = () => {
+   toast(was ? 'The ink of ' + was.id + ' is left as it was' : 'Ink cleared');
+ };
+ document.getElementById('sheet-rewrite').onclick = () => { if (EDIT) rewriteHand(EDIT); };
++document.getElementById('ask-agent').onclick = (e) => headerCall(
++  '/paper/' + PID + '/agent', {again: META && META.agent && !!META.agent.state},
++  d => 'claude is answering the round of ' + d.round + '. The notes fill in as it goes.', e.target);
++document.getElementById('commit').onclick = (e) => headerCall(
++  '/paper/' + PID + '/commit', {branch: false},
++  d => 'Committed ' + d.commit + ' on ' + d.branch + ': ' + d.notes.length + ' note(s). Versions shows it.',
++  e.target);
++document.getElementById('commit-branch').onclick = (e) => headerCall(
++  '/paper/' + PID + '/commit', {branch: true},
++  d => 'Committed ' + d.commit + ' on ' + d.branch + '. Take it or drop it when you have read it.',
++  e.target);
++document.getElementById('take').onclick = (e) => headerCall(
++  '/paper/' + PID + '/branch', {what: 'take'},
++  d => 'Took ' + d.took + ' into ' + d.branch + ' (' + d.how + ').', e.target);
++document.getElementById('drop').onclick = (e) => headerCall(
++  '/paper/' + PID + '/branch', {what: 'drop'},
++  d => 'Dropped ' + d.dropped + '; back on ' + d.branch + '.', e.target);
+ document.getElementById('sheet-reink').onclick = () => { if (EDIT) reinkNote(EDIT); };
+ 
+ // --- zooming the paper, and only the paper --------------------------------
+@@ -2339,6 +2449,7 @@ function showState() {
+   const waiting = allNotes().filter(n => waitingFixes(n).length).length;
+   chip.hidden = !waiting;
+   chip.textContent = 'Fixes (' + waiting + ')';
++  showAgentAndCommit();
+   el.innerHTML = META.build.pages + ' pages · built from <b>'
+     + (META.build.commit || 'working tree') + '</b>'
+     + (META.stale ? ' <span class="stale">· the source has moved on</span>' : '')

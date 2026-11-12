@@ -1,0 +1,1714 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>{{ name }}: editing · paperpen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="/favicon.svg">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #eef1f5; --paper: #ffffff; --ink: #172b4d; --muted: #5e6c84;
+    --bar: #dfe3ea; --accent: #0079bf; --line: #8883;
+    --cmd: #6554c0; --math: #1f7a4d; --comment: #97a0af; --brace: #d9822b;
+    --warn: #d9822b; --bad: #c0392b; --hit: #ffd54f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12151b; --paper: #262c38; --ink: #e6e9ef; --muted: #9aa3b2;
+            --bar: #1c212b; --cmd: #b3a4ff; --math: #57d9a3; --comment: #6b7688;
+            --hit: #8a6d00; }
+  }
+  * { box-sizing: border-box; }
+  /* scrolling is the browser's, pinching is not: a pinch zooms the page
+     being read (see pinchZoom), never the whole view with its bars */
+  html, body { margin: 0; height: 100%; touch-action: pan-x pan-y; }
+  body {
+    background: var(--bg); color: var(--ink); height: 100vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  button, select {
+    font: inherit; font-size: .72rem; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--line); border-radius: 5px; padding: .2rem .45rem;
+    cursor: pointer;
+  }
+  button:hover, select:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button svg { vertical-align: -3px; }
+  button[disabled] { opacity: .5; cursor: default; }
+
+  header {
+    display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+    padding: .45rem .7rem; background: var(--bar); flex: 0 0 auto;
+  }
+  header h1 { font-size: .82rem; margin: 0; font-weight: 600; }
+  header a { color: var(--muted); font-size: .75rem; text-decoration: none; }
+  header a:hover { color: var(--accent); }
+  header .grow { flex: 1 1 auto; }
+  .label { font-size: .63rem; color: var(--muted); text-transform: uppercase;
+           letter-spacing: .06em; }
+
+  main { flex: 1 1 auto; min-height: 0; display: flex; }
+  /* the file tree and the editors are one side of the grip, the build the other */
+  #left { flex: 1 1 auto; min-width: 0; display: flex; }
+  #edits { flex: 1 1 auto; min-width: 0; display: flex; }
+  #files { flex: 0 0 13rem; min-width: 0; overflow: auto; background: var(--bar);
+           border-right: 1px solid var(--line); font-size: .74rem; padding: .3rem 0; }
+  #files[hidden] { display: none; }
+  #files .dir, #files .file { display: flex; align-items: center; gap: .3rem;
+           padding: .18rem .5rem .18rem calc(.5rem + var(--depth, 0) * .8rem);
+           cursor: pointer; white-space: nowrap; }
+  #files .dir { color: var(--muted); font-weight: 600; }
+  #files .dir::before { content: "\25BE"; font-size: .6rem; width: .6rem; }
+  #files .dir.shut::before { content: "\25B8"; }
+  #files .file:hover, #files .dir:hover { background: color-mix(in srgb, var(--accent) 10%, var(--bar)); }
+  #files .file.open { background: color-mix(in srgb, var(--accent) 18%, var(--bar)); font-weight: 600; }
+  #files .file .name { overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
+  #files .file .star { color: #d9822b; flex: 0 0 auto; }
+  #files .file .mk { flex: 0 0 auto; font-size: .6rem; padding: 0 .3rem; visibility: hidden; }
+  #files .file:hover .mk { visibility: visible; }
+  #files .file.dim .name { color: var(--muted); }
+  #pdf { flex: 0 0 44%; min-width: 0; display: flex; flex-direction: column;
+         background: var(--bg); border-left: 1px solid var(--line); }
+  .grip { flex: 0 0 6px; cursor: col-resize; background: var(--bar); }
+  .grip.rows { cursor: row-resize; flex-basis: 6px; }
+  .grip:hover { background: var(--accent); }
+
+  .split { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; }
+  .split.row { flex-direction: row; }
+  .split.col { flex-direction: column; }
+
+  /* one editor */
+  .ed { display: flex; flex-direction: column; min-width: 0; min-height: 0;
+        flex: 1 1 0; border: 1px solid transparent; }
+  .ed.active { border-color: var(--accent); }
+  .edhead { display: flex; align-items: center; gap: .3rem; padding: .2rem .35rem;
+            background: var(--bar); flex: 0 0 auto; }
+  .edhead select { max-width: 60%; }
+  .edhead .dot { color: var(--warn); font-size: .8rem; visibility: hidden; }
+  .ed.dirty .edhead .dot { visibility: visible; }
+  .edhead .grow { flex: 1 1 auto; }
+
+  .wrap { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden;
+          background: var(--paper); }
+  /* The two layers must wrap identically, so neither may reserve room for a
+     scrollbar the other has not got: the textarea scrolls with its scrollbar
+     hidden and the highlighted copy under it is moved to match. */
+  .hl, .ta {
+    position: absolute; inset: 0; margin: 0; border: 0;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: var(--fs, .78rem); line-height: 1.5; tab-size: 2;
+    padding: .3rem .5rem .3rem 0;
+    white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
+  }
+  body.nowrap .hl, body.nowrap .ta { white-space: pre; overflow-wrap: normal; }
+  .hl { color: var(--ink); pointer-events: none; overflow: hidden; }
+  /* The gutter is the width of the line numbers. Both layers are indented by
+     it, the drawn text line by line and the textarea as a whole, or the
+     selection and the caret sit that far to the left of the words they are
+     on, over the numbers. */
+  .wrap { --gutter: 4.2rem; }
+  .ta {
+    padding-left: var(--gutter);
+    color: transparent; background: transparent; caret-color: var(--ink);
+    resize: none; outline: none; overflow: auto; scrollbar-width: none;
+  }
+  .ta::-webkit-scrollbar { width: 0; height: 0; }
+  .ta::selection { background: #0079bf55; color: transparent; }
+  .ln { position: relative; padding-left: var(--gutter); min-height: 1.5em; }
+  .ln::before {
+    content: attr(data-n); position: absolute; left: 0; width: 3.6rem;
+    text-align: right; color: var(--muted); opacity: .65; font-size: .72rem;
+  }
+  .ln.here { background: #0079bf12; }
+  .ln.flash { background: var(--hit); }
+  .hl .c { color: var(--comment); font-style: italic; }
+  .hl .k { color: var(--cmd); }
+  .hl .m { color: var(--math); }
+  .hl .b { color: var(--brace); }
+  .hl .sp { text-decoration: underline wavy #d0342c; text-decoration-thickness: 1px;
+            text-decoration-skip-ink: none; text-underline-offset: 3px; }
+
+  /* the build */
+  #pdfhead { display: flex; align-items: center; gap: .35rem; padding: .3rem .5rem;
+             background: var(--bar); flex: 0 0 auto; }
+  /* pan-y: the browser keeps vertical scrolling, and a sideways stroke comes
+     to the page, where it turns it. Zoomed in past the width, sideways is
+     panning again and the swipe stands down (see swipePages). */
+  #pdfbody { flex: 1 1 auto; min-height: 0; overflow: auto; padding: .6rem;
+             touch-action: pan-y; }
+  #pdfbody.wide { touch-action: pan-x pan-y; }
+  #pdfbody:focus { outline: none; }
+  #pdf:focus-within #pdfhead { box-shadow: inset 0 -2px 0 var(--accent); }
+  #sheet.moving { transition: none; }
+  #sheet { transition: transform .18s ease-out; }
+  #sheet { position: relative; margin: 0 auto; width: var(--zoom, 100%); }
+  /* every page, one under the other, at its own proportions before it loads */
+  #sheet .leaf { position: relative; margin: 0 0 .7rem; background: #fff;
+                 box-shadow: 0 1px 6px rgba(9,30,66,.25); }
+  #sheet img { display: block; width: 100%; height: 100%; }
+  /* a page of the build is a picture, and a press on it is ours, not Safari's */
+  #sheet, #sheet img { -webkit-user-select: none; user-select: none;
+                       -webkit-touch-callout: none; }
+  #hit { position: absolute; background: #ffd54f66; border: 1px solid #f0a500;
+         border-radius: 2px; display: none; pointer-events: none; }
+  #hit.show { display: block; animation: pulse 1.6s ease-out 1; }
+  @keyframes pulse { from { background: #ffd54fcc; } to { background: #ffd54f44; } }
+  #where { font-size: .7rem; color: var(--muted); font-family: ui-monospace, monospace; }
+  .stale { color: var(--warn); font-size: .66rem; }
+
+  footer {
+    flex: 0 0 auto; display: flex; align-items: center; gap: .6rem;
+    padding: .25rem .7rem; background: var(--bar); border-top: 1px solid var(--line);
+    font-size: .7rem; font-family: ui-monospace, monospace; color: var(--muted);
+    min-height: 1.6rem;
+  }
+  footer #say { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis;
+                white-space: nowrap; color: var(--ink); }
+  footer #say.bad { color: var(--bad); }
+  footer #chord { color: var(--accent); font-weight: 600; }
+  #find { display: none; gap: .3rem; align-items: center; }
+  #find.on { display: flex; }
+  #find button.on { background: var(--accent); color: #fff; border-color: transparent; }
+  /* every match, listed: emacs's occur, in this file or in all of them */
+  #occur { position: fixed; right: 1rem; bottom: 2.4rem; width: min(620px, 94vw);
+           max-height: 55vh; overflow: auto; background: var(--paper); color: var(--ink);
+           border: 1px solid var(--line); border-radius: 8px; z-index: 9;
+           box-shadow: 0 6px 24px rgba(9,30,66,.35); font-size: .74rem; }
+  #occur[hidden] { display: none; }
+  #occur .head { position: sticky; top: 0; background: var(--bar); padding: .3rem .6rem;
+                 color: var(--muted); display: flex; gap: .5rem; align-items: center; }
+  #occur .row { display: flex; gap: .6rem; padding: .22rem .6rem; cursor: pointer;
+                font-family: ui-monospace, "SF Mono", Menlo, monospace; white-space: pre;
+                overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--line); }
+  #occur .row:hover { background: color-mix(in srgb, var(--accent) 10%, var(--paper)); }
+  #occur .where { flex: 0 0 auto; color: var(--muted); min-width: 7rem; }
+  #occur .text { overflow: hidden; text-overflow: ellipsis; }
+  #occur mark { background: var(--hit); color: inherit; border-radius: 2px; }
+  #find input { font: inherit; font-size: .7rem; padding: .1rem .3rem;
+                border: 1px solid var(--line); border-radius: 4px;
+                background: var(--paper); color: var(--ink); }
+
+  #help {
+    position: fixed; inset: auto 1rem 2.4rem auto; width: min(560px, 92vw);
+    max-height: 70vh; overflow: auto; background: var(--paper); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px; padding: .8rem 1rem;
+    box-shadow: 0 6px 24px rgba(9,30,66,.35); display: none; z-index: 9;
+    font-size: .74rem; line-height: 1.5;
+  }
+  #help.on { display: block; }
+  #help h2 { font-size: .8rem; margin: .2rem 0 .4rem; }
+  #help table { border-collapse: collapse; width: 100%; }
+  #help td { padding: .06rem .4rem .06rem 0; vertical-align: top; }
+  #help td.k { font-family: ui-monospace, monospace; color: var(--accent);
+               white-space: nowrap; width: 9rem; }
+  #help p { margin: .5rem 0 0; color: var(--muted); }
+
+  @media (max-width: 900px) {
+    main { flex-direction: column; }
+    /* min-height: 0, or the build takes the height of its page image as its
+       minimum and the text above it is squeezed to its header. */
+    #left { flex: 1 1 50%; min-height: 0; }
+    #files { flex-basis: 10rem; }
+    #pdf { flex: 1 1 40%; min-height: 0; border-left: 0; border-top: 1px solid var(--line); }
+    .grip { flex-basis: 6px; cursor: row-resize; }
+  }
+</style>
+
+<header>
+  <a href="/paper/{{ pid }}" title="Back to the reader">&larr;</a>
+  <h1>{{ name }}</h1>
+  <button id="save" type="button" title="Write the changed files">save</button>
+  <button id="build" type="button" title="latexmk, into the cache">build</button>
+  <label class="label"><input type="checkbox" id="onsave"> build on save</label>
+  <span class="grow"></span>
+  <span class="label">keys</span>
+  <select id="keymap">
+    <option value="standard">standard</option>
+    <option value="emacs">emacs</option>
+  </select>
+  <button id="wrap" class="on" type="button" title="Wrap long lines">wrap</button>
+  <button id="spellon" class="on" type="button"
+    title="Underline the words aspell does not know; F7 or M-$ goes to the next one">spell</button>
+  <span class="label">split</span>
+  <button id="splitright" type="button" title="Beside (C-x 3)">&#9707;</button>
+  <button id="splitdown" type="button" title="Below (C-x 2)">&#9707;&#65038;</button>
+  <button id="closepane" type="button" title="Close this one (C-x 0)">&times;</button>
+  <button id="showhelp" type="button" title="The keys in this map">?</button>
+  <button id="showfiles" type="button" title="The paper's files, and which one is the main one">files</button>
+  <a href="/paper/{{ pid }}/versions">versions</a>
+</header>
+
+<main>
+  <div id="left"><aside id="files" hidden></aside><div id="edits"></div></div>
+  <div class="grip" id="grip"></div>
+  <section id="pdf">
+    <div id="pdfhead">
+      <button id="prev" type="button">&minus;</button>
+      <span id="where">–</span>
+      <button id="next" type="button">+</button>
+      <button id="out" type="button" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5M8 10.5h5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+      <button id="fit" type="button">fit</button>
+      <button id="in" type="button" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5M8 10.5h5M10.5 8v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+      <span class="grow" style="flex:1 1 auto"></span>
+      <span class="stale" id="staleness"></span>
+    </div>
+    <div id="pdfbody" tabindex="0">
+      <div id="sheet"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span id="chord"></span>
+  <span id="say">double click a line to find it in the build, or the build to find the line</span>
+  <span id="offer"></span>
+  <span id="find"><input id="findtext" placeholder="find: words in any order, !word"
+    size="24" title="orderless: every word, in any order; !word for without; a capital to match case"><button
+    id="findnext" type="button">next</button><button id="findoccur" type="button"
+    title="every matching line, listed">occur</button><button id="findall" type="button"
+    title="in all the paper's files">all files</button></span>
+  <span id="at">–</span>
+</footer>
+
+<div id="help"></div>
+
+<script src="/orderless.js"></script>
+<div id="occur" hidden></div>
+<script>
+const PID = {{ pid|tojson }};
+let MAIN = {{ main|tojson }};
+const SCALE = {{ scale|tojson }};
+const CUSTOM_BUILD = {{ custom_build|tojson }};
+
+const el = id => document.getElementById(id);
+const docs = new Map();        // path -> {text, mtime, dirty}
+const panes = new Map();       // id -> pane
+let tree = null, active = 0, nextId = 1;
+let meta = {pages: 0, sizes: [], synctex: false, at: ''};
+let page = 1, zoom = 0;
+
+// --- saying things ---------------------------------------------------------
+
+function say(text, bad, choices) {
+  const line = el('say');
+  line.textContent = text;
+  line.classList.toggle('bad', !!bad);
+  const offer = el('offer');
+  offer.innerHTML = '';
+  for (const [label, done] of choices || []) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.onclick = () => { offer.innerHTML = ''; done(); };
+    offer.appendChild(button);
+  }
+}
+
+async function ask(url, options) {
+  const answer = await fetch(url, options);
+  let data = {};
+  try { data = await answer.json(); } catch (e) { data = {}; }
+  if (!answer.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + answer.status));
+  return data;
+}
+
+function escaped(text) {
+  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// --- the text, highlighted -------------------------------------------------
+//
+// One block per line of source, which is what makes the gutter work when the
+// lines are wrapped: the number is drawn at the top of its own block and a
+// line that takes three rows on screen is still one number. The textarea sits
+// on top with transparent text and a visible caret, so what is being edited is
+// the textarea and what is being read is this.
+
+// A backslash before anything that is not a letter is a character, not the
+// start of something: `20\%` is a per cent sign and the line goes on, and
+// `\$` is a dollar and opens no maths. It is taken with the commands, so the
+// scan steps over it before `%` or `$` can claim it.
+const TOKENS = /(%.*$)|(\\[a-zA-Z@]+\*?|\\[^a-zA-Z@\s])|(\$[^$]*\$)|([{}])/gm;
+
+function colour(line, bad) {
+  let out = '', at = 0, found;
+  const parts = [];
+  TOKENS.lastIndex = 0;
+  while ((found = TOKENS.exec(line)) !== null) {
+    if (found[0].length === 0) { TOKENS.lastIndex++; continue; }
+    const kind = found[1] ? 'c' : found[2] ? 'k' : found[3] ? 'm' : 'b';
+    parts.push([found.index, found.index + found[0].length, kind]);
+  }
+  if (!bad || !bad.length) {
+    for (const [a, b, kind] of parts) {
+      out += escaped(line.slice(at, a)) + '<span class="' + kind + '">' + escaped(line.slice(a, b)) + '</span>';
+      at = b;
+    }
+    return out + escaped(line.slice(at));
+  }
+  // with words to underline, the line is cut wherever either a token or a
+  // misspelling starts or ends, and each piece gets both classes it is under
+  const cuts = new Set([0, line.length]);
+  for (const [a, b] of parts) { cuts.add(a); cuts.add(b); }
+  for (const w of bad) { cuts.add(w.from); cuts.add(w.to); }
+  const edges = [...cuts].sort((x, y) => x - y);
+  for (let i = 0; i + 1 < edges.length; i++) {
+    const a = edges[i], text = escaped(line.slice(a, edges[i + 1]));
+    const part = parts.find(q => q[0] <= a && a < q[1]);
+    const cls = ((part ? part[2] : '') + (bad.some(w => w.from <= a && a < w.to) ? ' sp' : '')).trim();
+    out += cls ? '<span class="' + cls + '">' + text + '</span>' : text;
+  }
+  return out;
+}
+
+function repaint(pane) {
+  const lines = pane.ta.value.split('\n');
+  const rows = new Array(lines.length);
+  const spelt = spellOn && SPELT.get(pane.path);
+  for (let i = 0; i < lines.length; i++) {
+    const bad = spelt && stillThere(spelt, i + 1, lines[i]);
+    rows[i] = '<div class="ln" data-n="' + (i + 1) + '">' + (colour(lines[i], bad) || ' ') + '</div>';
+  }
+  pane.hl.innerHTML = rows.join('');
+  pane.rows = pane.hl.children;
+  markLine(pane);
+}
+
+function lineAt(pane, where) {
+  return pane.ta.value.slice(0, where === undefined ? pane.ta.selectionStart : where)
+    .split('\n').length;
+}
+
+function markLine(pane) {
+  const n = lineAt(pane);
+  if (pane.marked && pane.marked !== pane.rows[n - 1]) pane.marked.classList.remove('here');
+  const row = pane.rows[n - 1];
+  if (row) { row.classList.add('here'); pane.marked = row; }
+  if (pane.id === active) {
+    const start = pane.ta.value.lastIndexOf('\n', pane.ta.selectionStart - 1) + 1;
+    el('at').textContent = pane.path + ':' + n + ':' + (pane.ta.selectionStart - start + 1);
+    const hit = wordAtCaret(pane);
+    const key = hit && (hit.n + ':' + hit.w.from + ':' + hit.w.word);
+    if (hit && key !== pane.offered) offerSpelling(pane, hit);
+    if (!hit) pane.offered = '';
+  }
+}
+
+// --- spelling --------------------------------------------------------------
+//
+// aspell, on the server, over the text as it is in the window, saved or not.
+// What it finds is kept by line with the word itself, and a word is underlined
+// only while it is still where aspell saw it: typing moves words about, and a
+// mark that no longer fits is left out until the next check comes back, a
+// moment after the typing stops.
+
+let spellOn = true;
+const SPELT = new Map();        // path -> Map(line -> [{from, to, word, suggest}])
+
+function stillThere(spelt, n, line) {
+  const here = spelt.get(n);
+  return here ? here.filter(w => line.slice(w.from, w.to) === w.word) : null;
+}
+
+function spellSoon(pane, wait) {
+  if (!spellOn) return;
+  clearTimeout(pane.spelling);
+  pane.spelling = setTimeout(() => spellCheck(pane), wait === undefined ? 900 : wait);
+}
+
+async function spellCheck(pane) {
+  if (!spellOn) return;
+  const path = pane.path;
+  let data;
+  try {
+    data = await ask('/paper/' + PID + '/spell', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: pane.ta.value})});
+  } catch (err) { say('spelling: ' + err.message, true); return; }
+  if (!data.available) {
+    spellSwitch(false, 'aspell is not installed where paperpen runs, so there is no spelling');
+    el('spellon').disabled = true;
+    return;
+  }
+  const lines = new Map();
+  for (const w of data.words) {
+    if (!lines.has(w.line)) lines.set(w.line, []);
+    lines.get(w.line).push(w);
+  }
+  SPELT.set(path, lines);
+  el('spellon').title = 'Spelling in ' + data.lang + ': ' + data.words.length
+    + ' word' + (data.words.length === 1 ? '' : 's') + ' in this file aspell does not know.'
+    + ' F7 or M-$ goes to the next one';
+  for (const p of panes.values()) if (p.path === path) repaint(p);
+}
+
+function spellSwitch(on, why) {
+  spellOn = on;
+  el('spellon').classList.toggle('on', on);
+  try { localStorage.setItem('paperpen.spell', on ? '1' : '0'); } catch (e) {}
+  for (const p of panes.values()) { clearTimeout(p.spelling); repaint(p); if (on) spellSoon(p, 0); }
+  say(why || (on ? 'spelling on' : 'spelling off'));
+}
+
+function lineStart(pane, n) {
+  let at = 0;
+  for (let i = 1; i < n; i++) at = pane.ta.value.indexOf('\n', at) + 1;
+  return at;
+}
+
+// the misspelt word the caret is in, if it is in one
+function wordAtCaret(pane) {
+  const spelt = spellOn && SPELT.get(pane.path);
+  if (!spelt) return null;
+  const n = lineAt(pane), start = lineStart(pane, n);
+  const col = pane.ta.selectionStart - start;
+  const line = pane.ta.value.slice(start).split('\n', 1)[0];
+  const w = (stillThere(spelt, n, line) || []).find(x => x.from <= col && col <= x.to);
+  return w ? {n: n, w: w} : null;
+}
+
+function offerSpelling(pane, hit) {
+  const {n, w} = hit;
+  const choices = w.suggest.map(s => [s, () => respell(pane, n, w, s)]);
+  choices.push(['add to the paper\'s words', () => acceptWord(w.word)]);
+  say('\u201c' + w.word + '\u201d is not in the dictionary' + (w.suggest.length ? ': ' : ''), false, choices);
+  pane.offered = n + ':' + w.from + ':' + w.word;
+}
+
+function respell(pane, n, w, to) {
+  const at = lineStart(pane, n) + w.from;
+  if (pane.ta.value.slice(at, at + w.word.length) !== w.word) {
+    say('that word has moved since it was checked', true);
+    return;
+  }
+  pane.ta.focus();
+  pane.ta.setSelectionRange(at, at + w.word.length);
+  put(pane, to);
+  spellSoon(pane);
+}
+
+async function acceptWord(word) {
+  try {
+    await ask('/paper/' + PID + '/spell/accept', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({word: word})});
+  } catch (err) { say(err.message, true); return; }
+  for (const lines of SPELT.values()) {
+    for (const [n, found] of lines) lines.set(n, found.filter(w => w.word !== word));
+  }
+  for (const p of panes.values()) repaint(p);
+  say('\u201c' + word + '\u201d is one of this paper\'s words now, kept in .paperpen-words');
+}
+
+// the next misspelling after the caret, selected, with what to put instead
+function spellNext(pane) {
+  if (!spellOn) return say('spelling is off: the spell button turns it on', true);
+  const spelt = SPELT.get(pane.path);
+  if (!spelt) return say('not checked yet');
+  const lines = pane.ta.value.split('\n');
+  const n0 = lineAt(pane), col0 = pane.ta.selectionEnd - lineStart(pane, n0);
+  for (let k = 0; k <= lines.length; k++) {
+    const n = (n0 - 1 + k) % lines.length + 1;
+    // on the caret's own line only what is after it, until the search has
+    // come all the way round to it again
+    const w = (stillThere(spelt, n, lines[n - 1]) || []).find(x => k > 0 || x.from >= col0);
+    if (w) {
+      const at = lineStart(pane, n) + w.from;
+      pane.ta.focus();
+      pane.ta.setSelectionRange(at, at + w.word.length);
+      markLine(pane);
+      pane.rows[n - 1] && pane.rows[n - 1].scrollIntoView({block: 'nearest'});
+      offerSpelling(pane, {n: n, w: w});
+      return;
+    }
+  }
+  say('no misspelt words in this file');
+}
+
+function flash(pane, n) {
+  const row = pane.rows[n - 1];
+  if (!row) return;
+  row.classList.add('flash');
+  setTimeout(() => row.classList.remove('flash'), 1400);
+  row.scrollIntoView({block: 'center'});
+}
+
+// --- documents -------------------------------------------------------------
+
+async function openDoc(path) {
+  if (docs.has(path)) return docs.get(path);
+  const data = await ask('/paper/' + PID + '/source?path=' + encodeURIComponent(path));
+  const doc = {text: data.text, was: data.stamp, dirty: false};
+  docs.set(path, doc);
+  return doc;
+}
+
+function touched(path, text) {
+  const doc = docs.get(path);
+  doc.text = text;
+  doc.dirty = true;
+  for (const pane of panes.values()) {
+    pane.el.classList.toggle('dirty', docs.get(pane.path).dirty);
+    if (pane.path === path && pane.ta.value !== text) {
+      const at = Math.min(pane.ta.selectionStart, text.length);
+      pane.ta.value = text;
+      pane.ta.setSelectionRange(at, at);
+      repaint(pane);
+    }
+  }
+}
+
+async function saveAll() {
+  const dirty = [...docs.entries()].filter(([, d]) => d.dirty);
+  if (!dirty.length) { say('nothing to save'); return true; }
+  for (const [path, doc] of dirty) {
+    try {
+      const done = await ask('/paper/' + PID + '/source', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({path: path, text: doc.text, was: doc.was})});
+      doc.was = done.stamp;
+      doc.dirty = false;
+    } catch (err) {
+      // The file moved underneath. Neither answer is obviously right, so both
+      // are offered and neither is taken: what is in the editor is not thrown
+      // away by reloading, and what is on disk is not thrown away by saving.
+      say(err.message, true, [
+        ['keep mine, write it anyway', () => overwrite(path)],
+        ['take the file as it is now', () => reload(path)],
+      ]);
+      return false;
+    }
+  }
+  for (const pane of panes.values()) pane.el.classList.remove('dirty');
+  say('saved ' + dirty.map(([p]) => p).join(', '));
+  markStale();
+  return true;
+}
+
+async function overwrite(path) {
+  const doc = docs.get(path);
+  try {
+    const done = await ask('/paper/' + PID + '/source', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path: path, text: doc.text})});   // no stamp: no check
+    doc.was = done.stamp;
+    doc.dirty = false;
+    for (const pane of panes.values()) pane.el.classList.remove('dirty');
+    say('wrote ' + path + ' over what was there; the previous contents are in '
+        + 'the cache, and git has the rest');
+    markStale();
+  } catch (err) {
+    say(err.message, true);
+  }
+}
+
+async function reload(path) {
+  const doc = docs.get(path);
+  const mine = doc.text;
+  docs.delete(path);
+  const fresh = await openDoc(path);
+  for (const pane of panes.values()) {
+    if (pane.path === path) { pane.ta.value = fresh.text; repaint(pane);
+                              pane.el.classList.remove('dirty'); pane.kill = mine; }
+  }
+  say('reloaded ' + path + '; what you had is in the kill ring; C-y puts it back');
+}
+
+// --- panes -----------------------------------------------------------------
+
+function makePane(path) {
+  const id = nextId++;
+  const box = document.createElement('div');
+  box.className = 'ed';
+  box.innerHTML =
+    '<div class="edhead"><select class="pick"></select><span class="dot">&#9679;</span>'
+    + '<span class="grow"></span><button class="x" type="button" title="Close (C-x 0)">&times;</button></div>'
+    + '<div class="wrap"><pre class="hl"></pre><textarea class="ta" spellcheck="false" '
+    + 'autocapitalize="off" autocorrect="off"></textarea></div>';
+  const pane = {id: id, path: path, el: box, ta: box.querySelector('.ta'),
+                hl: box.querySelector('.hl'), pick: box.querySelector('.pick'),
+                rows: [], marked: null, mark: null, point: null, kill: '', killing: false};
+  panes.set(id, pane);
+
+  pane.ta.addEventListener('input', () => { touched(pane.path, pane.ta.value); repaint(pane); autosave();
+                                            spellSoon(pane); });
+  pane.ta.addEventListener('scroll', () => { pane.hl.scrollTop = pane.ta.scrollTop;
+                                             pane.hl.scrollLeft = pane.ta.scrollLeft; });
+  pane.ta.addEventListener('keydown', event => onKey(event, pane));
+  pane.ta.addEventListener('keyup', () => markLine(pane));
+  pane.ta.addEventListener('click', () => { unmark(pane); focusOn(pane.id); markLine(pane); });
+  pane.ta.addEventListener('focus', () => focusOn(pane.id));
+  pane.ta.addEventListener('dblclick', () => { if (!tappedTwice()) toBuild(pane); });
+  // A double tap on an iPad selects the word and opens Safari's edit menu, and
+  // sends no dblclick. So two taps are counted here, the selection Safari has
+  // made is let go back to a caret on the line that was tapped, which closes
+  // the menu, and the line is shown in the build.
+  onDoubleTap(pane.ta, () => {
+    setTimeout(() => {
+      const at = pane.ta.selectionStart;
+      pane.ta.setSelectionRange(at, at);
+      markLine(pane);
+      toBuild(pane);
+    }, 60);
+  });
+  pane.pick.onchange = () => showIn(pane, pane.pick.value);
+  box.querySelector('.x').onclick = () => closePane(pane.id);
+  fillPicker(pane);
+  return pane;
+}
+
+function fillPicker(pane) {
+  pane.pick.innerHTML = (window.FILES || []).map(f =>
+    '<option value="' + escaped(f.path) + '"' + (f.path === pane.path ? ' selected' : '')
+    + '>' + escaped(f.path) + '</option>').join('');
+}
+
+async function showIn(pane, path) {
+  const doc = await openDoc(path);
+  pane.path = path;
+  pane.ta.value = doc.text;
+  pane.pick.value = path;
+  pane.el.classList.toggle('dirty', doc.dirty);
+  repaint(pane);
+  spellSoon(pane, 0);
+  markOpen();
+}
+
+function focusOn(id) {
+  active = id;
+  for (const pane of panes.values()) pane.el.classList.toggle('active', pane.id === id);
+  const pane = panes.get(id);
+  if (pane) markLine(pane);
+  markOpen();
+}
+
+// --- the file tree -----------------------------------------------------------
+//
+// The paper's files by folder. A click opens one in the window that has the
+// focus. The main file, the one that is built, has a star; any other .tex
+// that could be built on its own can be made the main one from here, which is
+// what a repository with a thesis, its chapters and a reply to referees needs.
+const SHUT = new Set();                     // folders folded away
+
+function drawFiles() {
+  const box = el('files');
+  box.innerHTML = '';
+  const files = (window.FILES || []).slice().sort((a, b) => a.path.localeCompare(b.path));
+  const shown = new Set();
+  for (const f of files) {
+    const parts = f.path.split('/');
+    for (let d = 1; d < parts.length; d++) {
+      const dir = parts.slice(0, d).join('/');
+      if (shown.has(dir)) continue;
+      shown.add(dir);
+      if ([...SHUT].some(s => dir.startsWith(s + '/'))) continue;
+      const row = document.createElement('div');
+      row.className = 'dir' + (SHUT.has(dir) ? ' shut' : '');
+      row.style.setProperty('--depth', d - 1);
+      row.textContent = parts[d - 1] + '/';
+      row.onclick = () => { SHUT.has(dir) ? SHUT.delete(dir) : SHUT.add(dir); drawFiles(); };
+      box.appendChild(row);
+    }
+    const inside = parts.slice(0, -1).join('/');
+    if (inside && [...SHUT].some(s => inside === s || inside.startsWith(s + '/'))) continue;
+    const row = document.createElement('div');
+    row.className = 'file' + (/\.(tex|bib)$/.test(f.path) ? '' : ' dim');
+    row.dataset.path = f.path;
+    row.style.setProperty('--depth', parts.length - 1);
+    row.title = f.path;
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = parts[parts.length - 1];
+    row.appendChild(name);
+    if (f.main) {
+      const star = document.createElement('span');
+      star.className = 'star';
+      star.textContent = '\u2605';
+      star.title = 'the main file: the one that is built';
+      row.appendChild(star);
+    } else if (f.candidate) {
+      const mk = document.createElement('button');
+      mk.type = 'button';
+      mk.className = 'mk';
+      mk.textContent = 'make main';
+      mk.title = 'build this file as the paper';
+      mk.onclick = event => { event.stopPropagation(); makeMain(f.path); };
+      row.appendChild(mk);
+    }
+    row.onclick = () => { const pane = here(); if (pane) { showIn(pane, f.path); pane.ta.focus(); } };
+    box.appendChild(row);
+  }
+  markOpen();
+}
+
+function markOpen() {
+  const pane = here();
+  for (const row of el('files').querySelectorAll('.file')) {
+    row.classList.toggle('open', !!pane && row.dataset.path === pane.path);
+  }
+}
+
+async function makeMain(path) {
+  try {
+    await ask('/paper/' + PID + '/main', {method: 'POST',
+              headers: {'Content-Type': 'application/json'}, body: JSON.stringify({main: path})});
+    MAIN = path;
+    for (const f of window.FILES) f.main = f.path === path;
+    drawFiles();
+    meta.built = false;
+    say('the main file is now ' + path + '; the paper has to be built from it',
+        false, [['build it now', () => build()]]);
+  } catch (err) {
+    say(err.message, true);
+  }
+}
+
+function showFiles(on) {
+  el('files').hidden = !on;
+  el('showfiles').classList.toggle('on', on);
+  try { localStorage.setItem('paperpen.files', on ? '1' : '0'); } catch (e) {}
+}
+
+function here() { return panes.get(active); }
+
+function place(node, host) {
+  if (node.leaf) { host.appendChild(panes.get(node.leaf).el); return; }
+  const box = document.createElement('div');
+  box.className = 'split ' + node.dir;
+  const first = document.createElement('div');
+  first.className = 'half';
+  first.style.cssText = 'display:flex; min-width:0; min-height:0; flex: ' + node.share + ' 1 0';
+  place(node.a, first);
+  const grip = document.createElement('div');
+  grip.className = 'grip' + (node.dir === 'col' ? ' rows' : '');
+  dragGrip(grip, box, node);
+  const second = document.createElement('div');
+  second.className = 'half';
+  second.style.cssText = 'display:flex; min-width:0; min-height:0; flex: ' + (1 - node.share) + ' 1 0';
+  place(node.b, second);
+  box.append(first, grip, second);
+  host.appendChild(box);
+}
+
+function layout() {
+  const host = el('edits');
+  host.innerHTML = '';
+  place(tree, host);
+  focusOn(active);
+}
+
+function dragGrip(grip, box, node) {
+  grip.addEventListener('pointerdown', down => {
+    down.preventDefault();
+    grip.setPointerCapture(down.pointerId);
+    const move = event => {
+      const area = box.getBoundingClientRect();
+      const part = node.dir === 'col'
+        ? (event.clientY - area.top) / area.height
+        : (event.clientX - area.left) / area.width;
+      node.share = Math.min(0.85, Math.max(0.15, part));
+      const halves = box.children;
+      halves[0].style.flex = node.share + ' 1 0';
+      halves[2].style.flex = (1 - node.share) + ' 1 0';
+    };
+    const up = () => { grip.removeEventListener('pointermove', move);
+                       grip.removeEventListener('pointerup', up); };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up);
+  });
+}
+
+function findLeaf(node, id, parent) {
+  if (node.leaf === id) return {node: node, parent: parent};
+  if (node.leaf) return null;
+  return findLeaf(node.a, id, node) || findLeaf(node.b, id, node);
+}
+
+function split(dir) {
+  const spot = findLeaf(tree, active, null);
+  if (!spot) return;
+  const pane = makePane(here().path);
+  const leaf = {leaf: pane.id};
+  const made = {dir: dir, share: 0.5, a: {leaf: active}, b: leaf};
+  if (!spot.parent) tree = made;
+  else if (spot.parent.a === spot.node) spot.parent.a = made;
+  else spot.parent.b = made;
+  layout();
+  showIn(pane, pane.path);
+  focusOn(pane.id);
+  pane.ta.focus();
+  say(dir === 'col' ? 'split below' : 'split beside');
+}
+
+function closePane(id) {
+  if (panes.size === 1) { say('the last window stays'); return; }
+  const spot = findLeaf(tree, id, null);
+  if (!spot || !spot.parent) return;
+  const other = spot.parent.a === spot.node ? spot.parent.b : spot.parent.a;
+  const grandparent = parentOf(tree, spot.parent, null);
+  if (!grandparent) tree = other;
+  else if (grandparent.a === spot.parent) grandparent.a = other;
+  else grandparent.b = other;
+  panes.delete(id);
+  const left = [...panes.keys()];
+  active = left[left.length - 1];
+  layout();
+  panes.get(active).ta.focus();
+}
+
+function parentOf(node, wanted, parent) {
+  if (node === wanted) return parent;
+  if (node.leaf) return null;
+  return parentOf(node.a, wanted, node) || parentOf(node.b, wanted, node);
+}
+
+function onlyPane() {
+  const keep = here();
+  for (const id of [...panes.keys()]) if (id !== keep.id) panes.delete(id);
+  tree = {leaf: keep.id};
+  layout();
+  keep.ta.focus();
+  say('one window');
+}
+
+function otherPane() {
+  const ids = [...panes.keys()];
+  const next = ids[(ids.indexOf(active) + 1) % ids.length];
+  focusOn(next);
+  panes.get(next).ta.focus();
+}
+
+// --- two taps, for a finger or a pen ---------------------------------------
+//
+// The browser's dblclick is a mouse's. A touch screen may send it, send it
+// late, or, in a text field on an iPad, not at all and select a word instead.
+// Two taps close together in time and place are counted here, and the
+// dblclick that sometimes follows them is ignored rather than acted on twice.
+const TWICE_MS = 380, TWICE_SLOP = 30;
+let lastTwice = 0;
+
+function tappedTwice() { return Date.now() - lastTwice < 700; }
+
+function onDoubleTap(node, act) {
+  let down = null, last = null;
+  node.addEventListener('pointerdown', event => {
+    down = event.pointerType === 'mouse' ? null
+      : {x: event.clientX, y: event.clientY, t: Date.now()};
+  });
+  node.addEventListener('pointerup', event => {
+    if (!down) return;
+    const still = Math.abs(event.clientX - down.x) + Math.abs(event.clientY - down.y) < 12
+      && Date.now() - down.t < 500;
+    down = null;
+    if (!still) { last = null; return; }
+    const near = last && Date.now() - last.t < TWICE_MS
+      && Math.abs(event.clientX - last.x) + Math.abs(event.clientY - last.y) < TWICE_SLOP;
+    if (!near) { last = {x: event.clientX, y: event.clientY, t: Date.now()}; return; }
+    last = null;
+    lastTwice = Date.now();
+    act(event);
+  });
+}
+
+// --- the build beside it ---------------------------------------------------
+
+function sizeOf(n) { return (meta.sizes && meta.sizes[n - 1]) || [595.28, 841.89]; }
+
+// The build is every page, one under the other, scrolled through like the
+// reader rather than turned one at a time. Each page is its own element at its
+// own proportions, so the column has its full height before an image arrives
+// and a page can be scrolled to before it has loaded.
+const HIT = document.createElement('div');
+HIT.id = 'hit';
+let drawnFor = '';
+
+function leafOf(n) { return el('sheet').querySelector('.leaf[data-page="' + n + '"]'); }
+
+function drawPages() {
+  const key = meta.pages + '@' + (meta.at || '');
+  if (!meta.pages || key === drawnFor) return;
+  drawnFor = key;
+  const sheet = el('sheet');
+  sheet.innerHTML = '';
+  for (let n = 1; n <= meta.pages; n++) {
+    const [w, h] = sizeOf(n);
+    const leaf = document.createElement('div');
+    leaf.className = 'leaf';
+    leaf.dataset.page = n;
+    leaf.style.aspectRatio = w + ' / ' + h;
+    const img = document.createElement('img');
+    img.alt = 'page ' + n;
+    img.loading = n <= 2 ? 'eager' : 'lazy';
+    img.src = '/paper/' + PID + '/page/' + n + '.png?scale=' + SCALE
+      + '&v=' + encodeURIComponent(meta.at || '');
+    leaf.appendChild(img);
+    sheet.appendChild(leaf);
+  }
+}
+
+function showPage(n) {
+  if (!meta.pages) return;
+  page = Math.min(Math.max(1, n), meta.pages);
+  const leaf = leafOf(page);
+  if (leaf) el('pdfbody').scrollTop = leaf.offsetTop - 8;
+  el('where').textContent = page + ' / ' + meta.pages;
+  HIT.classList.remove('show');
+}
+
+// which page is on show: the one across the middle of the panel
+function followPage() {
+  const body = el('pdfbody');
+  const middle = body.getBoundingClientRect().top + body.clientHeight / 2;
+  for (const leaf of el('sheet').querySelectorAll('.leaf')) {
+    const r = leaf.getBoundingClientRect();
+    if (r.top <= middle && r.bottom + 12 >= middle) {
+      const n = Number(leaf.dataset.page);
+      if (n !== page) { page = n; el('where').textContent = page + ' / ' + meta.pages; }
+      return;
+    }
+  }
+}
+
+// A sideways swipe on the build turns its page, the way a page is turned on a
+// tablet. Touch and pen only: a mouse has the buttons and the arrow keys, and a
+// mouse drag across the page is somebody selecting, not turning. The sheet
+// follows the finger so the gesture is seen to be taken, and springs back when
+// it was too short or too slanted to be one.
+function swipePages() {
+  const body = el('pdfbody'), sheet = el('sheet');
+  let start = null;
+  const wide = () => body.scrollWidth > body.clientWidth + 2;
+  body.addEventListener('pointerdown', event => {
+    if (event.pointerType === 'mouse' || !event.isPrimary || wide()) { start = null; return; }
+    start = {x: event.clientX, y: event.clientY, t: Date.now(), id: event.pointerId};
+  });
+  body.addEventListener('pointermove', event => {
+    if (!start || event.pointerId !== start.id) return;
+    const dx = event.clientX - start.x, dy = event.clientY - start.y;
+    if (Math.abs(dx) < Math.abs(dy)) return;
+    sheet.classList.add('moving');
+    sheet.style.transform = 'translateX(' + dx + 'px)';
+  });
+  const end = event => {
+    if (!start || event.pointerId !== start.id) return;
+    const dx = event.clientX - start.x, dy = event.clientY - start.y;
+    const quick = Date.now() - start.t < 800;
+    start = null;
+    sheet.classList.remove('moving');
+    sheet.style.transform = '';
+    if (event.type === 'pointercancel' || !quick) return;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
+    const before = page;
+    showPage(page + (dx < 0 ? 1 : -1));
+    if (page === before) say(page === 1 ? 'this is the first page' : 'this is the last page');
+  };
+  body.addEventListener('pointerup', end);
+  body.addEventListener('pointercancel', end);
+  // Zooming in past the pane's width makes sideways a pan again.
+  new ResizeObserver(() => body.classList.toggle('wide', wide())).observe(sheet);
+}
+
+function markStale() {
+  const dirty = [...docs.values()].some(d => d.dirty);
+  el('staleness').textContent = dirty ? 'edited, not saved'
+    : (meta.stale ? 'the build is older than the source' : '');
+}
+
+async function readMeta() {
+  const data = await ask('/paper/' + PID + '/meta');
+  meta = Object.assign({}, data.build, {stale: data.stale, built: data.built});
+  meta.pages = (data.build && data.build.pages) || 0;
+  meta.at = (data.build && data.build.at) || '';
+  const was = page;
+  drawPages();
+  showPage(was);
+  markStale();
+}
+
+async function build() {
+  if (CUSTOM_BUILD) {
+    say('this paper has its own build command in papers.json; run it in a terminal', true);
+    return;
+  }
+  if (![...docs.values()].every(d => !d.dirty) && !(await saveAll())) return;
+  const started = Date.now();
+  el('build').disabled = true;
+  say('building…');
+  try {
+    await ask('/paper/' + PID + '/build', {method: 'POST',
+              headers: {'Content-Type': 'application/json'}, body: '{}'});
+    await readMeta();
+    say('built ' + meta.pages + ' pages in ' + Math.round((Date.now() - started) / 1000) + 's');
+  } catch (err) {
+    say(err.message.split('\n').slice(0, 3).join(' · '), true);
+  } finally {
+    el('build').disabled = false;
+  }
+}
+
+// Source to page. The box SyncTeX gives is in points from the top left of the
+// page, so it is drawn as a fraction of the page's own size rather than of
+// whatever the image happens to be scaled to.
+async function toBuild(pane) {
+  if (!meta.synctex) { say('this build has no SyncTeX; build it again', true); return; }
+  const line = lineAt(pane);
+  try {
+    const found = await ask('/paper/' + PID + '/forward?path=' + encodeURIComponent(pane.path)
+                            + '&line=' + line);
+    showPage(found.page);
+    const [w, h] = sizeOf(found.page);
+    const box = HIT;
+    const leaf = leafOf(found.page);
+    if (leaf) leaf.appendChild(box);
+    const r = found.rect;
+    box.style.left = (100 * r[0] / w) + '%';
+    box.style.top = (100 * r[1] / h) + '%';
+    box.style.width = (100 * (r[2] - r[0]) / w) + '%';
+    box.style.height = (100 * Math.max(r[3] - r[1], 6) / h) + '%';
+    box.classList.add('show');
+    box.scrollIntoView({block: 'center'});
+    say(pane.path + ':' + line + ' is on page ' + found.page);
+  } catch (err) {
+    say(err.message, true);
+  }
+}
+
+// Page to source, which is the same map read the other way.
+async function toSource(event) {
+  if (!meta.synctex) { say('this build has no SyncTeX; build it again', true); return; }
+  const leaf = event.target.closest && event.target.closest('.leaf');
+  if (!leaf) return;
+  const on = Number(leaf.dataset.page);
+  const area = leaf.getBoundingClientRect();
+  const [w, h] = sizeOf(on);
+  const x = (event.clientX - area.left) / area.width * w;
+  const y = (event.clientY - area.top) / area.height * h;
+  try {
+    const found = await ask('/paper/' + PID + '/inverse?page=' + on
+                            + '&x=' + x.toFixed(2) + '&y=' + y.toFixed(2));
+    const pane = here();
+    if (pane.path !== found.file) await showIn(pane, found.file);
+    const before = pane.ta.value.split('\n').slice(0, found.line - 1).join('\n').length
+                   + (found.line > 1 ? 1 : 0);
+    pane.ta.focus();
+    pane.ta.setSelectionRange(before, before);
+    markLine(pane);
+    flash(pane, found.line);
+    say(found.file + ':' + found.line);
+  } catch (err) {
+    say(err.message, true);
+  }
+}
+
+// --- editing commands, which the keymaps are made of -----------------------
+//
+// Every one of these works on the selection of the active textarea, and every
+// change goes in with execCommand so that the browser's own undo still holds.
+// A command that set .value directly would be faster to write and would throw
+// away the undo history of whoever is typing.
+
+function put(pane, text) {
+  pane.ta.focus();
+  document.execCommand('insertText', false, text);
+  touched(pane.path, pane.ta.value);
+  repaint(pane);
+}
+
+function cut(pane, from, to) {
+  if (from === to) return '';
+  const text = pane.ta.value.slice(from, to);
+  pane.ta.setSelectionRange(from, to);
+  document.execCommand('delete');
+  touched(pane.path, pane.ta.value);
+  repaint(pane);
+  return text;
+}
+
+// With a mark set, the region runs from the mark to the point, and the point is
+// the end that moves. A textarea only knows a selection's start and end, and
+// working a move out from those goes wrong the moment the region runs
+// backwards from the mark, so the point is kept here.
+function pt(pane) {
+  return pane.mark !== null && pane.point !== null ? pane.point : pane.ta.selectionStart;
+}
+
+function go(pane, where, keepMark) {
+  const to = Math.max(0, Math.min(where, pane.ta.value.length));
+  if (keepMark && pane.mark !== null) {
+    pane.point = to;
+    pane.ta.setSelectionRange(Math.min(pane.mark, to), Math.max(pane.mark, to),
+                              to < pane.mark ? 'backward' : 'forward');
+  } else {
+    pane.point = null;
+    pane.ta.setSelectionRange(to, to);
+  }
+  markLine(pane);
+  showMark(pane);
+}
+
+// said in the footer while a mark is set, since an empty region shows nothing
+function showMark(pane) {
+  if (chord) return;
+  el('chord').textContent = pane.mark !== null ? 'mark' : '';
+}
+
+function unmark(pane) {
+  pane.mark = null;
+  pane.point = null;
+  showMark(pane);
+}
+
+function lineBounds(pane, at) {
+  const text = pane.ta.value;
+  const from = text.lastIndexOf('\n', at - 1) + 1;
+  let to = text.indexOf('\n', at);
+  if (to < 0) to = text.length;
+  return [from, to];
+}
+
+function column(pane, at) { return at - lineBounds(pane, at)[0]; }
+
+const CMD = {
+  save: () => saveAll(),
+  build: () => build(),
+  forward: () => toBuild(here()),
+  splitRight: () => split('row'),
+  splitDown: () => split('col'),
+  closePane: () => closePane(active),
+  onlyPane: () => onlyPane(),
+  otherPane: () => otherPane(),
+  openFile: () => { here().pick.focus(); say('pick the file in this window'); },
+  help: () => el('help').classList.toggle('on'),
+  find: () => { el('find').classList.add('on'); el('findtext').focus(); el('findtext').select(); },
+  findNext: () => findNext(),
+  occur: () => { CMD.find(); occur(); },
+  undo: () => document.execCommand('undo'),
+  redo: () => document.execCommand('redo'),
+
+  left: p => go(p, pt(p) - 1, true),
+  right: p => go(p, (p.mark !== null ? pt(p) : p.ta.selectionEnd) + 1, true),
+  up: p => {
+    const [from] = lineBounds(p, pt(p));
+    const col = pt(p) - from;
+    if (from === 0) return go(p, 0, true);
+    const [prev] = lineBounds(p, from - 1);
+    go(p, Math.min(prev + col, from - 1), true);
+  },
+  down: p => {
+    const [from, to] = lineBounds(p, pt(p));
+    const col = pt(p) - from;
+    if (to >= p.ta.value.length) return go(p, p.ta.value.length, true);
+    const [, end] = lineBounds(p, to + 1);
+    go(p, Math.min(to + 1 + col, end), true);
+  },
+  lineStart: p => go(p, lineBounds(p, pt(p))[0], true),
+  lineEnd: p => go(p, lineBounds(p, pt(p))[1], true),
+  top: p => go(p, 0, true),
+  bottom: p => go(p, p.ta.value.length, true),
+  pageDown: p => { p.ta.scrollTop += p.ta.clientHeight * 0.85; },
+  pageUp: p => { p.ta.scrollTop -= p.ta.clientHeight * 0.85; },
+  wordRight: p => {
+    const at = p.mark !== null ? pt(p) : p.ta.selectionEnd;
+    const rest = p.ta.value.slice(at);
+    const step = /^\W*\w+/.exec(rest);
+    go(p, at + (step ? step[0].length : rest.length), true);
+  },
+  wordLeft: p => {
+    const at = pt(p);
+    const before = p.ta.value.slice(0, at);
+    const step = /\w+\W*$/.exec(before);
+    go(p, at - (step ? step[0].length : before.length), true);
+  },
+  deleteChar: p => cut(p, p.ta.selectionStart, p.ta.selectionStart + 1),
+  killWord: p => {
+    const rest = p.ta.value.slice(p.ta.selectionStart);
+    const step = /^\W*\w+/.exec(rest);
+    p.kill = cut(p, p.ta.selectionStart, p.ta.selectionStart + (step ? step[0].length : 0));
+  },
+  killLine: p => {
+    const at = p.ta.selectionStart;
+    const [, to] = lineBounds(p, at);
+    // C-k at the end of a line takes the newline, and a run of them collects
+    // into one kill, which is how a paragraph gets moved
+    const taken = at === to ? cut(p, at, at + 1) : cut(p, at, to);
+    p.kill = p.killing ? p.kill + taken : taken;
+    p.killing = true;
+  },
+  yank: p => put(p, p.kill || ''),
+  setMark: p => {
+    const at = p.ta.selectionStart;
+    p.mark = at;
+    p.point = at;
+    p.ta.setSelectionRange(at, at);
+    showMark(p);
+    say('mark set: move, and the region follows');
+  },
+  killRegion: p => {
+    if (p.mark === null) return say('no mark', true);
+    const [from, to] = [Math.min(p.mark, pt(p)), Math.max(p.mark, pt(p))];
+    unmark(p);
+    p.kill = cut(p, from, to);
+  },
+  copyRegion: p => {
+    if (p.mark === null) return say('no mark', true);
+    const [from, to] = [Math.min(p.mark, pt(p)), Math.max(p.mark, pt(p))];
+    p.kill = p.ta.value.slice(from, to);
+    unmark(p);
+    p.ta.setSelectionRange(to, to);
+    say('copied ' + p.kill.length + ' characters');
+  },
+  cancel: p => {
+    const at = pt(p);
+    unmark(p);
+    p.ta.setSelectionRange(at, at);
+    el('find').classList.remove('on');
+    el('occur').hidden = true;
+    el('help').classList.remove('on'); say('quit'); p.ta.focus();
+  },
+  spellNext: p => spellNext(p),
+  windLeft: () => windmove('left'),
+  windRight: () => windmove('right'),
+  windUp: () => windmove('up'),
+  windDown: () => windmove('down'),
+};
+
+// Keys, spelled the way emacs spells them: C-x C-s is two strokes, M- is Alt.
+const MAPS = {
+  standard: {
+    'C-s': 'save', 'C-Enter': 'build', 'F5': 'build', 'F8': 'forward',
+    'C-f': 'find', 'F3': 'findNext', 'C-g': 'findNext',
+    'M-3': 'splitRight', 'M-2': 'splitDown', 'M-0': 'closePane', 'M-1': 'onlyPane',
+    'F6': 'otherPane', 'C-o': 'openFile', 'F1': 'help', 'Escape': 'cancel',
+    'F7': 'spellNext',
+  },
+  emacs: {
+    'C-x C-s': 'save', 'C-c C-c': 'build', 'C-c C-v': 'forward',
+    'C-x 3': 'splitRight', 'C-x 2': 'splitDown', 'C-x 0': 'closePane',
+    'C-x 1': 'onlyPane', 'C-x o': 'otherPane', 'C-x C-f': 'openFile',
+    'C-x ?': 'help', 'C-s': 'find', 'C-r': 'find', 'C-g': 'cancel', 'M-s o': 'occur',
+    'M-$': 'spellNext',
+    'C-f': 'right', 'C-b': 'left', 'C-n': 'down', 'C-p': 'up',
+    'C-a': 'lineStart', 'C-e': 'lineEnd', 'M-<': 'top', 'M->': 'bottom',
+    'C-v': 'pageDown', 'M-v': 'pageUp', 'M-f': 'wordRight', 'M-b': 'wordLeft',
+    'C-d': 'deleteChar', 'M-d': 'killWord', 'C-k': 'killLine', 'C-y': 'yank',
+    'C-Space': 'setMark', 'C-@': 'setMark', 'C-w': 'killRegion', 'M-w': 'copyRegion',
+    'S-ArrowLeft': 'windLeft', 'S-ArrowRight': 'windRight',
+    'S-ArrowUp': 'windUp', 'S-ArrowDown': 'windDown',
+    'C-/': 'undo', 'C-_': 'undo', 'C-?': 'redo',
+  },
+};
+
+// the keys that move the point, which with a mark set carry the region along
+const REGION_KEYS = {ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up',
+                     ArrowDown: 'down', Home: 'lineStart', End: 'lineEnd'};
+
+const NEVER_MINE = new Set(['C-w', 'C-n', 'C-t', 'C-q']);   // the browser's, not ours
+
+let map = 'standard';
+let chord = '';
+
+function spell(event) {
+  let key = event.key;
+  if (key === ' ') key = 'Space';
+  if (key === 'Control' || key === 'Alt' || key === 'Shift' || key === 'Meta') return '';
+  const parts = [];
+  if (event.ctrlKey) parts.push('C');
+  if (event.altKey || event.metaKey) parts.push('M');
+  // Shift only for a named key: a shifted letter is already its capital
+  if (event.shiftKey && key.length > 1) parts.push('S');
+  parts.push(key);
+  return parts.join('-');
+}
+
+function onKey(event, pane) {
+  const stroke = spell(event);
+  if (!stroke) return;
+  if (stroke === 'Tab') {                 // a textarea would move the focus
+    event.preventDefault();
+    put(pane, '  ');
+    return;
+  }
+  const keys = MAPS[map];
+  if (map === 'emacs' && !chord && pane.mark !== null && REGION_KEYS[stroke]) {
+    event.preventDefault();
+    CMD[REGION_KEYS[stroke]](pane);
+    return;
+  }
+  const whole = chord ? chord + ' ' + stroke : stroke;
+  const prefix = Object.keys(keys).some(k => k.startsWith(whole + ' '));
+  if (prefix) {
+    event.preventDefault();
+    chord = whole;
+    el('chord').textContent = whole + ' -';
+    return;
+  }
+  const name = keys[whole];
+  chord = '';
+  el('chord').textContent = '';
+  if (!name) {
+    if (whole.startsWith('C-') || whole.startsWith('M-')) pane.killing = false;
+    return;                                   // an ordinary keystroke, typed
+  }
+  event.preventDefault();
+  const done = CMD[name];
+  if (done) done(pane);
+  // a run of C-k collects into one kill; anything else ends the run
+  if (name !== 'killLine') pane.killing = false;
+  showMark(pane);
+}
+
+// --- windmove: Shift and an arrow go to the window that way ----------------
+//
+// The editors and the build beside them are the windows. The one chosen is
+// the nearest whose middle lies that way, sideways distance counting double,
+// which is what the eye takes for "the one to the left".
+function windmove(dir) {
+  const inBuild = document.activeElement === el('pdfbody');
+  const from = inBuild ? el('pdf') : (here() && here().el);
+  if (!from) return;
+  const a = from.getBoundingClientRect();
+  const cx = (a.left + a.right) / 2, cy = (a.top + a.bottom) / 2;
+  const targets = [...panes.values()].map(p => ({box: p.el, to: () => { focusOn(p.id); p.ta.focus(); }}))
+    .concat([{box: el('pdf'), to: () => el('pdfbody').focus()}])
+    .filter(t => t.box !== from);
+  let best = null, score = Infinity;
+  for (const t of targets) {
+    const r = t.box.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    const tx = (r.left + r.right) / 2, ty = (r.top + r.bottom) / 2;
+    const along = dir === 'left' ? cx - tx : dir === 'right' ? tx - cx
+      : dir === 'up' ? cy - ty : ty - cy;
+    if (along <= 1) continue;
+    const across = dir === 'left' || dir === 'right' ? Math.abs(ty - cy) : Math.abs(tx - cx);
+    if (along + 2 * across < score) { score = along + 2 * across; best = t; }
+  }
+  if (best) best.to();
+  else say('no window ' + (dir === 'up' ? 'above' : dir === 'down' ? 'below' : 'to the ' + dir));
+}
+
+// With the build focused, left and right turn its pages; Shift goes back.
+el('pdfbody').addEventListener('keydown', event => {
+  const stroke = spell(event);
+  const name = MAPS[map][stroke];
+  if (name && name.startsWith('wind')) { event.preventDefault(); CMD[name](); return; }
+  if (stroke === 'ArrowRight' || stroke === 'PageDown') { event.preventDefault(); showPage(page + 1); }
+  if (stroke === 'ArrowLeft' || stroke === 'PageUp') { event.preventDefault(); showPage(page - 1); }
+});
+
+// --- find, which both maps want --------------------------------------------
+
+// Orderless, as emacs has it: a line matches when every word of the query is
+// in it, in any order, !word for one that must not be, a capital to match
+// case. `next` goes to the next such line after the caret and selects what was
+// found on it; `occur` lists them all, in this file or in every file.
+function findNext() {
+  const what = el('findtext').value;
+  const pane = here();
+  if (!what.trim()) { CMD.find(); return; }
+  const pieces = Orderless.parse(what);
+  const lines = pane.ta.value.split('\n');
+  const from = lineAt(pane, pane.ta.selectionEnd);       // 1-based, the caret's line
+  for (let k = 0; k < lines.length; k++) {
+    const n = (from + k) % lines.length;                  // the next line first, then round
+    if (!Orderless.matches(pieces, lines[n])) continue;
+    const start = lines.slice(0, n).join('\n').length + (n ? 1 : 0);
+    const [a, b] = Orderless.spans(pieces, lines[n])[0] || [0, 0];
+    pane.ta.focus();
+    pane.ta.setSelectionRange(start + a, start + b);
+    markLine(pane);
+    flash(pane, n + 1);
+    return;
+  }
+  say('not found: ' + what, true);
+}
+
+let occurAll = false;
+
+async function occur() {
+  const what = el('findtext').value;
+  const pane = here();
+  if (!what.trim() || !pane) { el('occur').hidden = true; return; }
+  let rows;
+  if (occurAll) {
+    const got = await ask('/paper/' + PID + '/grep?q=' + encodeURIComponent(what));
+    rows = got.matches;
+  } else {
+    const pieces = Orderless.parse(what);
+    rows = pane.ta.value.split('\n').map((text, i) => ({file: pane.path, line: i + 1, text: text}))
+      .filter(r => Orderless.matches(pieces, r.text));
+  }
+  const box = el('occur');
+  box.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'head';
+  head.textContent = rows.length + ' line' + (rows.length === 1 ? '' : 's')
+    + (occurAll ? ' in the paper' : ' in ' + pane.path) + ' for “' + what + '”';
+  box.appendChild(head);
+  const pieces = Orderless.parse(what);
+  for (const r of rows) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const where = document.createElement('span');
+    where.className = 'where';
+    where.textContent = (occurAll ? r.file + ':' : '') + r.line;
+    const text = document.createElement('span');
+    text.className = 'text';
+    text.appendChild(Orderless.marked(pieces, r.text));
+    row.append(where, text);
+    row.onclick = () => goToLine(r.file, r.line, pieces);
+    box.appendChild(row);
+  }
+  box.hidden = false;
+}
+
+async function goToLine(path, line, pieces) {
+  const pane = here();
+  if (pane.path !== path) await showIn(pane, path);
+  const lines = pane.ta.value.split('\n');
+  const start = lines.slice(0, line - 1).join('\n').length + (line > 1 ? 1 : 0);
+  const [a, b] = (pieces && Orderless.spans(pieces, lines[line - 1] || '')[0]) || [0, 0];
+  pane.ta.focus();
+  pane.ta.setSelectionRange(start + a, start + b);
+  markLine(pane);
+  flash(pane, line);
+}
+
+// --- what the keys are, written down ---------------------------------------
+
+const SAID = {
+  save: 'save the changed files', build: 'build (latexmk)',
+  forward: 'show this line in the build', splitRight: 'split beside',
+  splitDown: 'split below', closePane: 'close this window',
+  onlyPane: 'this window only', otherPane: 'to the next window',
+  openFile: 'choose the file in this window', help: 'this list',
+  find: 'find', findNext: 'find again', occur: 'every matching line, listed', undo: 'undo', redo: 'redo',
+  left: 'back a character', right: 'on a character', up: 'up a line',
+  down: 'down a line', lineStart: 'start of line', lineEnd: 'end of line',
+  top: 'top of file', bottom: 'end of file', pageDown: 'a screen down',
+  pageUp: 'a screen up', wordRight: 'on a word', wordLeft: 'back a word',
+  deleteChar: 'delete forwards', killWord: 'kill a word',
+  killLine: 'kill to end of line (a run of them collects)', yank: 'yank it back',
+  setMark: 'set the mark', killRegion: 'kill the region',
+  copyRegion: 'copy the region', cancel: 'quit',
+  windLeft: 'to the window on the left', windRight: 'to the window on the right',
+  windUp: 'to the window above', windDown: 'to the window below',
+  spellNext: 'the next misspelt word, and what to put instead',
+};
+
+function writeHelp() {
+  const keys = MAPS[map];
+  const rows = Object.entries(keys).map(([key, name]) =>
+    '<tr><td class="k">' + escaped(key) + '</td><td>' + escaped(SAID[name] || name)
+    + (NEVER_MINE.has(key) ? ': <b>the browser takes this one</b>' : '') + '</td></tr>').join('');
+  el('help').innerHTML =
+    '<h2>' + map + ' keys</h2><table>' + rows + '</table>'
+    + '<p>Double click a line to find it in the build; double click the build to '
+    + 'find the line. Arrow keys, selection and the browser’s own undo work '
+    + 'in both maps.</p>'
+    + (map === 'emacs' ? '<p>C-w, C-n, C-t and C-q are taken by the browser '
+       + 'before the page sees them. C-w is bound anyway, for a browser that '
+       + 'lets it through; the region can also be killed with C-Space then C-k.</p>' : '');
+}
+
+// Nothing is written without being asked for. This is somebody's manuscript,
+// and a background save that runs while a sentence is half rewritten is a
+// change to a paper nobody made.
+function autosave() { markStale(); }
+
+// --- wiring ----------------------------------------------------------------
+
+el('save').onclick = () => saveAll().then(ok => { if (ok && el('onsave').checked) build(); });
+el('build').onclick = () => build();
+el('splitright').onclick = () => split('row');
+el('splitdown').onclick = () => split('col');
+el('closepane').onclick = () => closePane(active);
+el('showhelp').onclick = () => { writeHelp(); el('help').classList.toggle('on'); };
+el('showfiles').onclick = () => showFiles(el('files').hidden);
+el('keymap').onchange = event => { map = event.target.value; writeHelp();
+                                   say('keys: ' + map);
+                                   try { localStorage.setItem('paperpen.keys', map); } catch (e) {} };
+el('wrap').onclick = event => { document.body.classList.toggle('nowrap');
+                                event.target.classList.toggle('on',
+                                  !document.body.classList.contains('nowrap')); };
+el('spellon').onclick = () => spellSwitch(!spellOn);
+el('prev').onclick = () => showPage(page - 1);
+el('next').onclick = () => showPage(page + 1);
+function setZoom(scale) {
+  scale = Math.min(4, Math.max(0.5, scale));
+  zoom = Math.abs(scale - 1) < 0.01 ? 0 : scale;
+  el('sheet').style.setProperty('--zoom', ((zoom || 1) * 100) + '%');
+}
+
+// zoom about a point on screen, keeping what is under it under it
+function zoomAt(scale, clientX, clientY) {
+  const body = el('pdfbody');
+  const leaf = document.elementFromPoint(clientX, clientY);
+  const on = (leaf && leaf.closest && leaf.closest('.leaf')) || leafOf(page);
+  if (!on) { setZoom(scale); return; }
+  const r0 = on.getBoundingClientRect();
+  const fx = (clientX - r0.left) / r0.width, fy = (clientY - r0.top) / r0.height;
+  setZoom(scale);
+  const r = on.getBoundingClientRect();
+  body.scrollLeft += r.left + fx * r.width - clientX;
+  body.scrollTop += r.top + fy * r.height - clientY;
+}
+
+function zoomMiddle(scale) {
+  const r = el('pdfbody').getBoundingClientRect();
+  zoomAt(scale, r.left + r.width / 2, r.top + r.height / 2);
+}
+
+el('in').onclick = () => zoomMiddle((zoom || 1) * 1.25);
+el('out').onclick = () => zoomMiddle((zoom || 1) / 1.25);
+el('fit').onclick = () => zoomMiddle(1);
+
+// Ctrl and the wheel zoom the panel under the pointer, and only that one: the
+// build by its pages, an editor by its text. The browser's own zoom, which
+// would take the whole page with its bars, is kept out of both.
+el('pdfbody').addEventListener('wheel', event => {
+  if (!event.ctrlKey) return;
+  event.preventDefault();
+  zoomAt((zoom || 1) * Math.exp(-event.deltaY * 0.0015), event.clientX, event.clientY);
+}, {passive: false});
+
+function textSize(pane, factor) {
+  const now = pane.size || 0.78;
+  pane.size = Math.min(2, Math.max(0.5, now * factor));
+  pane.el.style.setProperty('--fs', pane.size + 'rem');
+}
+
+el('edits').addEventListener('wheel', event => {
+  if (!event.ctrlKey) return;
+  const box = event.target.closest && event.target.closest('.ed');
+  const pane = box && [...panes.values()].find(p => p.el === box);
+  if (!pane) return;
+  event.preventDefault();
+  textSize(pane, Math.exp(-event.deltaY * 0.0015));
+}, {passive: false});
+
+// Two fingers on a page zoom that page, and never the whole view with its bars.
+// The page is resized around the point between the fingers, so what was under
+// them stays under them and a two-finger drag pans as it zooms. Not while the
+// pen is near: a palm resting beside it is two contacts too.
+function pinchZoom(body, leafOf, scaleOf, setScale) {
+  const PALM = 90, GRACE = 1600;   // an iPad fingertip is 40 to 70 across
+  let at = null, penAt = 0;
+  for (const kind of ['pointerdown', 'pointermove']) {
+    document.addEventListener(kind, event => {
+      if (event.pointerType === 'pen') penAt = Date.now();
+    }, true);
+  }
+  const two = event => {
+    if (event.touches.length !== 2) return null;
+    const [a, b] = event.touches;
+    if ([a, b].some(t => 2 * Math.max(t.radiusX || 0, t.radiusY || 0) > PALM)) return null;
+    return {d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+            x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2};
+  };
+  body.addEventListener('touchstart', event => {
+    const got = two(event), leaf = got && leafOf(got.x, got.y);
+    if (!got || !got.d || !leaf || Date.now() - penAt < GRACE) return;
+    event.preventDefault();
+    const r = leaf.getBoundingClientRect();
+    at = {d: got.d, scale: scaleOf(), leaf: leaf,
+          fx: (got.x - r.left) / r.width, fy: (got.y - r.top) / r.height};
+  }, {passive: false});
+  body.addEventListener('touchmove', event => {
+    const got = at && two(event), leaf = at && at.leaf;
+    if (!got || !leaf) return;
+    event.preventDefault();
+    setScale(Math.min(4, Math.max(0.5, at.scale * got.d / at.d)));
+    const r = leaf.getBoundingClientRect();
+    body.scrollLeft += r.left + at.fx * r.width - got.x;
+    body.scrollTop += r.top + at.fy * r.height - got.y;
+  }, {passive: false});
+  for (const kind of ['touchend', 'touchcancel']) {
+    body.addEventListener(kind, event => {
+      if (!at || event.touches.length >= 2) return;
+      at = null;
+      if (Math.abs(scaleOf() - 1) < 0.04) setScale(1);
+    });
+  }
+}
+// Safari's own gesture events, which it fires for a pinch whatever the CSS says
+for (const kind of ['gesturestart', 'gesturechange']) {
+  document.addEventListener(kind, event => event.preventDefault(), {passive: false});
+}
+
+pinchZoom(el('pdfbody'), (x, y) => {
+  const under = document.elementFromPoint(x, y);
+  return (under && under.closest && under.closest('.leaf')) || leafOf(page);
+}, () => zoom || 1, setZoom);
+el('sheet').addEventListener('dblclick', event => { if (!tappedTwice()) toSource(event); });
+onDoubleTap(el('sheet'), toSource);
+el('pdfbody').addEventListener('scroll', followPage, {passive: true});
+swipePages();
+el('findnext').onclick = () => findNext();
+el('findoccur').onclick = () => el('occur').hidden ? occur() : (el('occur').hidden = true);
+el('findall').onclick = event => {
+  occurAll = !occurAll;
+  event.target.classList.toggle('on', occurAll);
+  occur();
+};
+el('findtext').addEventListener('keydown', event => {
+  if (event.key === 'Enter') { event.preventDefault(); findNext(); }
+  if (event.key === 'Escape') {
+    el('find').classList.remove('on'); el('occur').hidden = true; here().ta.focus();
+  }
+});
+// the list follows what is typed, once it is open
+let occurWait = null;
+el('findtext').addEventListener('input', () => {
+  if (el('occur').hidden) return;
+  clearTimeout(occurWait);
+  occurWait = setTimeout(occur, 220);
+});
+
+// Ctrl-S outside a textarea would be the browser's "save this page as", which
+// is never what is meant on a page that has a save of its own.
+window.addEventListener('keydown', event => {
+  const focused = document.activeElement;
+  if (spell(event) === 'C-s' && !(focused && focused.classList.contains('ta'))) {
+    event.preventDefault();
+    saveAll();
+  }
+});
+window.addEventListener('beforeunload', event => {
+  if ([...docs.values()].some(d => d.dirty)) { event.preventDefault(); event.returnValue = ''; }
+});
+
+// The grip between the text and the build is the same handle as the one
+// between two editors: main's children are the editors, the grip and the PDF,
+// which is the shape dragGrip expects. Its direction is asked each time,
+// because below 900px main stacks the two and the grip is then dragged up and
+// down rather than sideways.
+const MAIN_BOX = document.querySelector('main');
+dragGrip(el('grip'), MAIN_BOX, {
+  get dir() { return getComputedStyle(MAIN_BOX).flexDirection === 'column' ? 'col' : 'row'; },
+  share: 0.56,
+});
+
+(async function start() {
+  try { map = localStorage.getItem('paperpen.keys') || 'standard'; } catch (e) {}
+  try { spellOn = localStorage.getItem('paperpen.spell') !== '0'; } catch (e) {}
+  el('spellon').classList.toggle('on', spellOn);
+  el('keymap').value = map;
+  writeHelp();
+  const listing = await ask('/paper/' + PID + '/files');
+  window.FILES = listing.files;
+  drawFiles();
+  // shown unless it was put away, or the screen is too narrow to spare it
+  let filesOn = window.innerWidth >= 900 && window.innerWidth > window.innerHeight;
+  try { const kept = localStorage.getItem('paperpen.files'); if (kept !== null) filesOn = kept === '1'; } catch (e) {}
+  showFiles(filesOn);
+  const first = makePane(MAIN);
+  tree = {leaf: first.id};
+  active = first.id;
+  layout();
+  fillPicker(first);
+  await showIn(first, MAIN);
+  first.ta.focus();
+  await readMeta();
+  if (!meta.built) say('this paper has not been built yet; build it to see it beside the text');
+  else if (!meta.synctex) say('this build has no SyncTeX, so the two sides cannot point at each other');
+})().catch(err => say(err.message, true));
+</script>

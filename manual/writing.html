@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Writing it back · paperpen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The source with the build beside it, SyncTeX both ways, and the paper beside its own past.">
+<link rel="stylesheet" href="manual.css">
+<header class="top">
+  <a class="mark" href="index.html">paperpen</a>
+  <nav><a href="index.html">What it is</a>
+    <a href="reading.html">Reading a paper</a>
+    <a href="writing.html" class="here">Writing it back</a>
+    <a href="network.html">The tablet, over the network</a>
+    <a href="agents.html">Working the queue</a>
+    <a href="commands.html">Every command</a></nav>
+</header>
+<main>
+<h1>Writing it back</h1>
+<p class="lede">The source with the build beside it, and the paper beside its
+own past.</p>
+
+<h2>The editor</h2>
+<p><b>Edit</b>, in the reader's header or on a shelf card, opens the paper's
+source on the left and the build on the right.</p>
+<figure>
+  <img src="shots/editor.png" alt="LaTeX source on the left, the compiled page on the right">
+  <figcaption>Double click a line and the place it made lights up on the page.
+  Double click the page and the line that made it takes the caret, in the
+  right file, which for an <code>\input</code> is not the one that was
+  compiled.</figcaption>
+</figure>
+<p>Both directions are the same SyncTeX map the reader uses to hang a note on a
+sentence, read forwards as well as backwards.</p>
+
+<h3>The window breaks</h3>
+<p><code>C-x 3</code> puts a second window beside the first and
+<code>C-x 2</code> below it; each takes its own file, or another part of the
+same one, and the divider drags. The buttons in the header do the same for a
+keymap without chords.</p>
+
+<h3>Two keymaps</h3>
+<table>
+  <tr><th></th><th>standard</th><th>emacs</th></tr>
+  <tr><td>save</td><td><code>Ctrl-S</code></td><td><code>C-x C-s</code></td></tr>
+  <tr><td>build</td><td><code>Ctrl-Enter</code>, <code>F5</code></td><td><code>C-c C-c</code></td></tr>
+  <tr><td>show this line in the build</td><td><code>F8</code></td><td><code>C-c C-v</code></td></tr>
+  <tr><td>find, again</td><td><code>Ctrl-F</code>, <code>F3</code></td><td><code>C-s</code></td></tr>
+  <tr><td>split beside, below</td><td><code>Alt-3</code>, <code>Alt-2</code></td><td><code>C-x 3</code>, <code>C-x 2</code></td></tr>
+  <tr><td>close, only, next window</td><td><code>Alt-0</code>, <code>Alt-1</code>, <code>F6</code></td><td><code>C-x 0</code>, <code>C-x 1</code>, <code>C-x o</code></td></tr>
+  <tr><td>moving about</td><td>arrows, Home, End</td><td><code>C-a C-e C-f C-b C-n C-p</code>, <code>M-f M-b</code>, <code>M-&lt;</code>, <code>M-&gt;</code></td></tr>
+  <tr><td>kill, yank, region</td><td>the usual clipboard</td><td><code>C-k</code> (a run collects), <code>C-y</code>, <code>C-Space</code> then <code>C-w</code> or <code>M-w</code></td></tr>
+</table>
+<p>Arrow keys, shift-selection and the browser's own undo work in both. The
+<code>?</code> button lists whichever map is on, and the choice is
+remembered.</p>
+<div class="note warn"><b>Four keys are the browser's.</b> <code>C-w</code>,
+<code>C-n</code>, <code>C-t</code> and <code>C-q</code> never reach a page:
+<code>C-w</code> closes the tab. They are bound anyway for a browser that lets
+them through, and the region can always be killed with <code>C-Space</code>
+then <code>C-k</code>.</div>
+
+<h3>What it writes, and when</h3>
+<p>Nothing until you ask. There is no autosave, because a background write that
+lands while a sentence is half rewritten is a change to a paper that nobody
+made. <b>build on save</b> compiles after a save, for anyone who wants that
+rhythm.</p>
+<p>Saving writes the file in the paper's own working tree, with no copy and no lock,
+so <code>git status</code>, <code>git diff</code> and every other habit go on
+meaning what they meant. Two guards sit around it:</p>
+<ul>
+  <li><b>A file that moved underneath is not overwritten.</b> A pull, a sync
+  from elsewhere, or another window is allowed to win. The save is refused and
+  both answers are offered: keep yours and write it anyway, or take the file as
+  it is now, which puts what you had in the kill ring, so <code>C-y</code>
+  brings it back into the new text.</li>
+  <li><b>The previous contents are kept first</b>, in
+  <code>~/.cache/paperpen/&lt;paper&gt;/edits/</code>, the last twenty saves of
+  each file. A short net for the ten minutes before a commit; git is the long
+  one.</li>
+</ul>
+<p>It is an editor for writing sentences in a paper and nothing else: no
+completion, no linting, no live collaboration. The merge tool is git, which is
+already there.</p>
+
+<h2>The paper beside its own past</h2>
+<p><b>Versions</b> opens four panes: the log, a build at a past commit, the
+build as it is now, and latexdiff between the two.</p>
+<figure>
+  <img src="shots/versions.png" alt="The log, an old build, the current build, and the diff">
+  <figcaption>One page number drives all three, and with <code>locked</code> on
+  they scroll together. <code>source</code> in the diff pane swaps the
+  marked-up PDF for <code>git diff</code> over the <code>.tex</code>, which is
+  what shows a macro or a figure path.</figcaption>
+</figure>
+<pre><code>paperpen versions my-manuscript                 # the log, and which of it is built
+paperpen versions my-manuscript --build 901c97a # that commit, compiled
+paperpen versions my-manuscript --diff 901c97a  # latexdiff against the working tree
+paperpen versions my-manuscript --source 901c97a
+paperpen versions my-manuscript --forget        # throw the version builds away</code></pre>
+<div class="note"><b>Nothing is written into the paper's repository.</b> A
+version is taken with <code>git archive</code>, which only reads, and unpacked
+into the cache, so this works on a repository that is dirty or mid-rebase, and
+no worktree administration is left behind to prune.</div>
+<p>A commit cannot change, so once built it is served from the cache forever. A
+build with the working tree on one side can, so it is marked <i>the paper has
+been edited since</i> rather than quietly redrawn, with a
+<code>rebuild</code> button in the pane.</p>
+<p>latexdiff does the markup and has to be installed. A manuscript that needs
+its own flags sets the whole command:</p>
+<pre><code>PAPERPEN_LATEXDIFF="latexdiff --flatten --math-markup=whole" paperpen serve</code></pre>
+<div class="next"><a href="reading.html">&larr; Reading a paper</a><a href="network.html">The tablet, over the network &rarr;</a></div>
+</main>
+<footer>
+  Read a paper on a tablet, mark it up with a pen, get the marks back where the
+  paper is written. · <a href="index.html">the manual</a> ·
+  by <a href="https://github.com/acorbe">acorbe</a>
+</footer>
+</html>

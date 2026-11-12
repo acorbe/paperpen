@@ -1,0 +1,13 @@
+diff --git a/reader.html b/reader.html
+index e440133..56cc563 100644
+--- a/reader.html
++++ b/reader.html
+@@ -1235,7 +1235,7 @@ function openNote(note) {
+   rewrite.textContent = hasHand ? 'Change the handwriting' : 'Write on it';
+   document.getElementById('sheet-reink').hidden = !(canChange && hasInk);
+   document.getElementById('sheet-redo-said').textContent = canChange ? ''
+-    : 'Sent with an earlier round, so it stays as it was sent.';
++    : 'Sent with an earlier round: its handwriting and ink stay as they were sent.';
+   document.getElementById('sheet').hidden = false;
+   showFixes(note);
+   // The panel comes up from the bottom and its Save is at the foot of it,

@@ -1,0 +1,181 @@
+diff --git a/reader.html b/reader.html
+index 8e699ab..5a54b09 100644
+--- a/reader.html
++++ b/reader.html
+@@ -16,7 +16,11 @@
+     :root { --bg: #12151b; --paper: #262c38; --ink: #e6e9ef; --muted: #9aa3b2; --bar: #1c212b; }
+   }
+   * { box-sizing: border-box; }
+-  html, body { margin: 0; height: 100%; }
++  /* Scrolling is the browser's, pinching is not: a pinch zooms the paper,
++     which the page does itself (see pinchZoom), and never the whole page with
++     its bars. pan-x pan-y is the browser's pinch taken away everywhere, the
++     tool bar included, since a touch-action narrows down the tree. */
++  html, body { margin: 0; height: 100%; touch-action: pan-x pan-y; }
+   body {
+     background: var(--bg); color: var(--ink); overscroll-behavior: none;
+     font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+@@ -64,7 +68,7 @@
+   #pages { flex: 1 1 auto; overflow: auto; padding: .7rem 0 4rem; -webkit-overflow-scrolling: touch; }
+   .page {
+     position: relative; margin: 0 auto .8rem; background: var(--paper);
+-    box-shadow: 0 1px 6px rgba(9,30,66,.25); width: min(100%, var(--w));
++    box-shadow: 0 1px 6px rgba(9,30,66,.25); width: var(--w);
+   }
+   .page img { display: block; width: 100%; height: auto; }
+   .page canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+@@ -76,7 +80,7 @@
+      is what kills inertia. It is taken away only while the pen is actually
+      near: the S Pen reports hover, so by the time the tip lands the surface is
+      already the pen's. */
+-  body.pen .page canvas { touch-action: pan-x pan-y pinch-zoom; }
++  body.pen .page canvas { touch-action: pan-x pan-y; }
+   body.pen.pen-near .page canvas { touch-action: none; }
+   .pageno {
+     position: absolute; bottom: -1.1rem; right: .2rem; font-size: .6rem; color: var(--muted);
+@@ -440,11 +444,14 @@
+ const PID = "{pid}";
+ const CUSTOM_BUILD = "{custom_build}" === "1";
+ const TAGS = ["SCIENCE", "LANGUAGE", "QUESTION", "TODO"];
+-let META = null, TOOL = "read", ZOOM = 0, EDIT = null, PENDING = [];
++let META = null, TOOL = "read", EDIT = null, PENDING = [];
+ const LAYOUT = {};  // page -> its sentences, its words and its figures
+ let GRAIN = 'sentence';  // what a tap picks out: a sentence or a single word
+ let SEL = null;       // what the note being written is about
+-const ZOOMS = [0, 1.25, 1.5, 2];   // 0 is fit to the screen
++// The zoom is continuous, as a pinch is, and counted from the width that fits
++// the screen: 1 is fit. The buttons are steps along it.
++let ZSCALE = 1;
++const ZMIN = 0.5, ZMAX = 4, ZSTEP = 1.25;
+ 
+ function toast(msg, ms) {
+   const el = document.getElementById('toast');
+@@ -463,8 +470,11 @@ function postJSON(url, body) {
+ // One image per page at the size the PDF says, so a coordinate on screen is a
+ // coordinate in the document with one multiplication and no guessing.
+ function pageWidth() {
+-  if (!ZOOMS[ZOOM]) return Math.min(window.innerWidth - 16, 1100);
+-  return (META.build.sizes[0][0]) * ZOOMS[ZOOM] * (window.devicePixelRatio > 1 ? 1 : 1);
++  return Math.min(window.innerWidth - 16, 1100) * ZSCALE;
++}
++
++function zoomLabel() {
++  return Math.abs(ZSCALE - 1) < 0.01 ? 'fit' : Math.round(ZSCALE * 100) + '%';
+ }
+ 
+ // the sentences of a page are fetched as it comes into view: by the time a
+@@ -515,7 +525,7 @@ function render() {
+ function relayout() {
+   const w = pageWidth();
+   for (const el of document.querySelectorAll('.page')) el.style.setProperty('--w', w + 'px');
+-  document.getElementById('zoom-label').textContent = ZOOMS[ZOOM] ? ZOOMS[ZOOM] + '×' : 'fit';
++  document.getElementById('zoom-label').textContent = zoomLabel();
+   drawAll();
+   placePins();
+ }
+@@ -1859,12 +1869,99 @@ document.getElementById('ink-clear').onclick = () => {
+ document.getElementById('sheet-rewrite').onclick = () => { if (EDIT) rewriteHand(EDIT); };
+ document.getElementById('sheet-reink').onclick = () => { if (EDIT) reinkNote(EDIT); };
+ 
+-document.getElementById('zoom-in').onclick = () => {
+-  ZOOM = Math.min(ZOOM + 1, ZOOMS.length - 1); relayout();
+-};
+-document.getElementById('zoom-out').onclick = () => {
+-  ZOOM = Math.max(ZOOM - 1, 0); relayout();
+-};
++// --- zooming the paper, and only the paper --------------------------------
++//
++// Resizing the pages around a point rather than scaling a picture of them:
++// the point on the paper that was under the fingers stays under them, and
++// the pages are the right size the moment the fingers lift. Which page the
++// point is on, and where on it, is what is kept: the gaps between the pages
++// do not grow with them, so a position down the whole column would drift.
++const pagesHost = document.getElementById('pages');
++
++function anchorAt(clientX, clientY) {
++  let best = null, gap = 1e9;
++  for (const el of document.querySelectorAll('.page')) {
++    const r = el.getBoundingClientRect();
++    const d = clientY < r.top ? r.top - clientY : clientY > r.bottom ? clientY - r.bottom : 0;
++    if (d < gap) { gap = d; best = {el: el, r: r}; }
++    if (!d) break;
++  }
++  if (!best) return null;
++  return {el: best.el, fx: (clientX - best.r.left) / best.r.width,
++          fy: (clientY - best.r.top) / best.r.height};
++}
++
++function zoomAround(scale, clientX, clientY, anchor) {
++  ZSCALE = Math.min(ZMAX, Math.max(ZMIN, scale));
++  const w = pageWidth();
++  for (const el of document.querySelectorAll('.page')) el.style.setProperty('--w', w + 'px');
++  document.getElementById('zoom-label').textContent = zoomLabel();
++  if (!anchor) return;
++  const r = anchor.el.getBoundingClientRect();
++  pagesHost.scrollLeft += r.left + anchor.fx * r.width - clientX;
++  pagesHost.scrollTop += r.top + anchor.fy * r.height - clientY;
++}
++
++// the buttons zoom about the middle of what is on screen
++function zoomBy(factor) {
++  const box = pagesHost.getBoundingClientRect();
++  const cx = box.left + box.width / 2, cy = box.top + box.height / 2;
++  let next = ZSCALE * factor;
++  if (Math.abs(next - 1) < 0.04) next = 1;
++  zoomAround(next, cx, cy, anchorAt(cx, cy));
++  relayout();
++}
++
++document.getElementById('zoom-in').onclick = () => zoomBy(ZSTEP);
++document.getElementById('zoom-out').onclick = () => zoomBy(1 / ZSTEP);
++
++// Two fingers on the paper. Never while the pen is in play, and never with a
++// palm among them: a hand resting on the glass beside the pen is two
++// contacts, and zooming the page under a sentence being written is the worst
++// thing this could do. The canvases redraw once, when the fingers lift; while
++// they move the ink is the picture of itself, stretched.
++let pinch = null;
++
++function twoFingers(e) {
++  if (e.touches.length !== 2) return null;
++  const [a, b] = e.touches;
++  if ([a, b].some(t => 2 * Math.max(t.radiusX || 0, t.radiusY || 0) > PALM_SIZE)) return null;
++  return {d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
++          x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2};
++}
++
++pagesHost.addEventListener('touchstart', (e) => {
++  const two = twoFingers(e);
++  if (!two || Date.now() - lastPenAt < PEN_GRACE || !two.d) return;
++  e.preventDefault();
++  pinch = {d: two.d, scale: ZSCALE, anchor: anchorAt(two.x, two.y)};
++  // whatever the first finger had started is not happening now
++  cancelHold(); cancelTapHint();
++  tapFrom = null; lastTap = null; pan = null;
++}, {passive: false});
++
++pagesHost.addEventListener('touchmove', (e) => {
++  if (!pinch) return;
++  const two = twoFingers(e);
++  if (!two) return;
++  e.preventDefault();
++  zoomAround(pinch.scale * two.d / pinch.d, two.x, two.y, pinch.anchor);
++}, {passive: false});
++
++for (const ev of ['touchend', 'touchcancel']) {
++  pagesHost.addEventListener(ev, (e) => {
++    if (!pinch || e.touches.length >= 2) return;
++    pinch = null;
++    if (Math.abs(ZSCALE - 1) < 0.04) ZSCALE = 1;
++    relayout();
++    if (!pad.hidden) placePad();
++  });
++}
++
++// Safari's own gesture events, which it fires for a pinch whatever the CSS says
++for (const ev of ['gesturestart', 'gesturechange']) {
++  document.addEventListener(ev, (e) => e.preventDefault(), {passive: false});
++}
+ 
+ document.getElementById('finish').onclick = () => {
+   const n = (META.open || []).length;

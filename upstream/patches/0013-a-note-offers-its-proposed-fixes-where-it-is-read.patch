@@ -1,0 +1,262 @@
+diff --git a/reader.html b/reader.html
+index 448c01f..47b6e60 100644
+--- a/reader.html
++++ b/reader.html
+@@ -117,6 +117,47 @@
+     padding: .8rem .9rem calc(.9rem + env(safe-area-inset-bottom)); max-height: 82vh; overflow: auto;
+   }
+   #sheet[hidden] { display: none; }
++  /* a note's proposed fixes, in the note itself: one tap puts one in */
++  .sheet-fixes { margin: 0 0 .6rem; display: flex; flex-direction: column; gap: .45rem; }
++  .sheet-fixes[hidden] { display: none; }
++  .sheet-fixes .fx-head { font-size: .68rem; color: var(--muted); text-transform: uppercase;
++                          letter-spacing: .06em; }
++  .fx-card { border: 1px solid #8884; border-radius: 9px; padding: .55rem .65rem;
++             background: var(--bg); }
++  .fx-card.applied { border-color: #1f7a4d; }
++  .fx-card.failed { border-color: var(--pen); }
++  .fx-top { display: flex; align-items: flex-start; gap: .5rem; }
++  .fx-what { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: .85rem; }
++  .fx-by { font-weight: 400; font-size: .65rem; color: var(--muted); margin-left: .3rem; }
++  .fx-why { font-size: .74rem; color: var(--muted); margin: .15rem 0 .3rem; }
++  .fx-file { font-family: ui-monospace, monospace; font-size: .62rem; color: var(--muted);
++             margin-top: .25rem; }
++  .fx-diff { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .78rem;
++             line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
++             background: var(--paper); border-radius: 6px; padding: .35rem .5rem; }
++  .fx-diff del { color: #c0392b; background: #c0392b1a; text-decoration: line-through; }
++  .fx-diff ins { color: #1f7a4d; background: #1f7a4d1f; text-decoration: none; }
++  .fx-use { flex: 0 0 auto; border: 0; border-radius: 8px; padding: .5rem .95rem;
++            background: var(--accent); color: #fff; font: inherit; font-size: .82rem;
++            font-weight: 600; cursor: pointer; touch-action: manipulation; }
++  .fx-use[disabled] { opacity: .5; }
++  .fx-badge { flex: 0 0 auto; font-size: .66rem; font-weight: 700; color: #fff;
++              border-radius: 4px; padding: .1rem .4rem; background: #1f7a4d; }
++  .fx-badge.failed { background: var(--pen); }
++  .fx-problem { font-size: .72rem; color: var(--pen); margin-top: .25rem; }
++  .fx-msg { font-size: .8rem; line-height: 1.4; padding: .4rem .6rem; border-radius: 9px;
++            background: var(--bg); max-width: 92%; }
++  .fx-msg.you { align-self: flex-end; background: color-mix(in srgb, var(--accent) 14%, var(--paper)); }
++  .fx-msg .fx-who { display: block; font-size: .6rem; color: var(--muted); }
++  .fx-reply { display: flex; gap: .4rem; }
++  .fx-reply input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: .82rem;
++                    border: 1px solid #8884; border-radius: 8px; padding: .4rem .55rem;
++                    background: var(--bg); color: var(--ink); }
++  .fx-reply button { border: 1px solid #8883; border-radius: 8px; background: var(--bg);
++                     color: var(--ink); font: inherit; font-size: .8rem; padding: .4rem .8rem;
++                     cursor: pointer; }
++  /* a pin whose note has a fix waiting to be chosen */
++  .pin.has-fix { box-shadow: 0 0 0 3px var(--accent), 0 1px 3px rgba(0,0,0,.4); }
+   /* the panel's Save, again, where the hand already is: under the tool bar */
+   #quick-save {
+     position: fixed; z-index: 31; border: 0; border-radius: 8px;
+@@ -296,6 +337,8 @@
+      title="This paper as it was, and what changed since">Versions</a>
+   <a class="chip" href="/paper/{pid}/edit"
+      title="Write the source, with the build beside it">Edit</a>
++  <a class="chip" id="fixes-chip" href="/paper/{pid}/feedback" hidden
++     title="Every fix proposed for this paper's notes, to choose from">Fixes</a>
+   <button id="rebuild" type="button">Rebuild</button>
+   <button class="go" id="finish" type="button">Finish and send</button>
+ </header>
+@@ -419,6 +462,7 @@
+   </div>
+   <blockquote class="quote" id="sheet-quote"></blockquote>
+   <canvas id="sheet-hand" hidden></canvas>
++  <div class="sheet-fixes" id="sheet-fixes" hidden></div>
+   <div class="sheet-redo" id="sheet-redo" hidden>
+     <button type="button" id="sheet-rewrite" title="Open the pad with this handwriting in it">Change the handwriting</button>
+     <button type="button" id="sheet-reink" title="Take up this ink on the page again">Change the ink</button>
+@@ -738,7 +782,8 @@ function placePins() {
+       el.appendChild(band);
+     }
+     const pin = document.createElement('button');
+-    pin.className = 'pin ' + (n.claude ? 'claude' : n.tag) + (n.status === 'done' ? ' done' : '');
++    pin.className = 'pin ' + (n.claude ? 'claude' : n.tag) + (n.status === 'done' ? ' done' : '')
++      + (waitingFixes(n).length ? ' has-fix' : '');
+     pin.textContent = n.claude ? 'C' : (i + 1);
+     let px = n.rect[2], py = (n.rect[1] + n.rect[3]) / 2;
+     while (taken.some(t => t.page === n.page
+@@ -1152,6 +1197,7 @@ function openNote(note) {
+   document.getElementById('sheet-redo-said').textContent = canChange ? ''
+     : 'Sent with an earlier round, so it stays as it was sent.';
+   document.getElementById('sheet').hidden = false;
++  showFixes(note);
+   // The panel comes up from the bottom and its Save is at the foot of it,
+   // which after Keep the ink as a note is the far end of the screen from the
+   // hand that pressed it. So the same Save is also put just under the bar.
+@@ -1294,6 +1340,163 @@ function placeQuickSave() {
+   quick.style.left = Math.max(8, Math.min(left, window.innerWidth - w - 8)) + 'px';
+ }
+ 
++// --- a note's proposed fixes --------------------------------------------
++// Whoever answered a delivered round may have proposed fixes for its notes:
++// exact text in the source and what replaces it. They are offered here, in the
++// note, where it is being read, and one tap puts one in. The same fixes, all
++// of them at once, are at /paper/<id>/feedback.
++function answersOf(note) {
++  const all = (META && META.feedback) || {};
++  return (note && note.id && all[note.id]) || {fixes: [], thread: []};
++}
++
++function waitingFixes(note) {
++  if (!note || note.claude || note.status === 'done' || note.status === 'rejected') return [];
++  return answersOf(note).fixes.filter(f => f.state === 'proposed');
++}
++
++function fxMake(tag, cls, text) {
++  const node = document.createElement(tag);
++  if (cls) node.className = cls;
++  if (text !== undefined) node.textContent = text;
++  return node;
++}
++
++// word by word, each stretch of change shown whole: what goes, then what comes
++function fxDiff(old, neu) {
++  const split = t => t.split(/(\s+)/).filter(x => x.length);
++  const a = split(old), b = split(neu), box = fxMake('div', 'fx-diff');
++  if (a.length * b.length > 250000) {
++    box.append(fxMake('del', '', old), document.createTextNode(' '), fxMake('ins', '', neu));
++    return box;
++  }
++  const n = a.length, m = b.length;
++  const L = Array.from({length: n + 1}, () => new Uint16Array(m + 1));
++  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
++    L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
++  }
++  const parts = [];
++  const add = (key, t) => {
++    const last = parts[parts.length - 1];
++    if (key === 'same') { if (last && 'same' in last) last.same += t; else parts.push({same: t}); }
++    else if (last && !('same' in last)) last[key] += t;
++    else parts.push(key === 'del' ? {del: t, ins: ''} : {del: '', ins: t});
++  };
++  let i = 0, j = 0;
++  while (i < n || j < m) {
++    if (i < n && j < m && a[i] === b[j]) { add('same', a[i]); i++; j++; }
++    else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) { add('ins', b[j]); j++; }
++    else { add('del', a[i]); i++; }
++  }
++  const slight = t => !t.trim() || (t.trim().split(/\s+/).length === 1 && t.trim().length <= 3);
++  for (let changed = true; changed;) {
++    changed = false;
++    for (let k = 1; k + 1 < parts.length; k++) {
++      const p = parts[k - 1], q = parts[k], r = parts[k + 1];
++      if ('same' in q && !('same' in p) && !('same' in r) && slight(q.same)) {
++        parts.splice(k - 1, 3, {del: p.del + q.same + r.del, ins: p.ins + q.same + r.ins});
++        changed = true;
++        break;
++      }
++    }
++  }
++  for (const part of parts) {
++    if ('same' in part) { box.append(document.createTextNode(part.same)); continue; }
++    const edge = part.del || part.ins;
++    const lead = edge.match(/^\s*/)[0], trail = edge.match(/\s*$/)[0];
++    const gone = part.del.trim(), come = part.ins.trim();
++    if (lead) box.append(document.createTextNode(lead));
++    if (gone) box.append(fxMake('del', '', gone));
++    if (gone && come) box.append(document.createTextNode(' '));
++    if (come) box.append(fxMake('ins', '', come));
++    if (trail) box.append(document.createTextNode(trail));
++  }
++  return box;
++}
++
++function showFixes(note) {
++  const box = document.getElementById('sheet-fixes');
++  box.innerHTML = '';
++  const said = answersOf(note);
++  box.hidden = !(said.fixes.length || said.thread.length);
++  if (box.hidden) return;
++  const open = !(note.status === 'done' || note.status === 'rejected');
++  const waiting = said.fixes.filter(f => f.state === 'proposed').length;
++  box.append(fxMake('div', 'fx-head', waiting && open
++    ? (waiting === 1 ? 'A fix is proposed' : waiting + ' fixes are proposed: choose one')
++    : 'What came back'));
++  for (const fix of said.fixes) {
++    const card = fxMake('div', 'fx-card ' + fix.state);
++    const top = fxMake('div', 'fx-top');
++    const what = fxMake('div', 'fx-what', fix.summary);
++    what.append(fxMake('span', 'fx-by', fix.by));
++    top.append(what);
++    if (fix.state === 'proposed' && open) {
++      const use = fxMake('button', 'fx-use', 'Use this');
++      use.type = 'button';
++      use.onclick = () => useFix(note, fix, use);
++      top.append(use);
++    } else if (fix.state === 'applied') {
++      top.append(fxMake('span', 'fx-badge', 'applied'));
++    } else if (fix.state === 'failed') {
++      top.append(fxMake('span', 'fx-badge failed', 'did not apply'));
++    }
++    card.append(top);
++    if (fix.why) card.append(fxMake('div', 'fx-why', fix.why));
++    for (const e of fix.edits || []) {
++      card.append(fxMake('div', 'fx-file', e.file), fxDiff(e.old, e.new));
++    }
++    if (fix.problem) card.append(fxMake('div', 'fx-problem', fix.problem));
++    box.append(card);
++  }
++  for (const m of said.thread) {
++    const msg = fxMake('div', 'fx-msg' + (m.by === 'you' ? ' you' : ''));
++    msg.append(fxMake('span', 'fx-who', m.by), document.createTextNode(m.text));
++    box.append(msg);
++  }
++  if (open) {
++    const row = fxMake('div', 'fx-reply');
++    const input = fxMake('input');
++    input.placeholder = 'Reply: a further note, or which way to go';
++    const send = fxMake('button', '', 'Reply');
++    send.type = 'button';
++    send.onclick = () => replyTo(note, input, send);
++    row.append(input, send);
++    box.append(row);
++  }
++}
++
++function useFix(note, fix, button) {
++  button.disabled = true;
++  postJSON('/paper/' + PID + '/feedback/apply', {note: note.id, fixes: [fix.id]})
++    .then(data => {
++      if (!data.ok) throw new Error(data.error || 'unknown error');
++      const failed = Object.values(data.failed || {});
++      if (failed.length) throw new Error(failed[0]);
++      const files = [...new Set((fix.edits || []).map(e => e.file))].join(', ');
++      closeSheet();
++      load();
++      toast('Put into ' + files + ', and the note is closed. Rebuild to read it.', 5000);
++    })
++    .catch(err => { toast('Not applied: ' + err.message, 6000); button.disabled = false; load(); });
++}
++
++function replyTo(note, input, button) {
++  if (!input.value.trim()) { input.focus(); return; }
++  button.disabled = true;
++  postJSON('/paper/' + PID + '/feedback/reply', {note: note.id, text: input.value})
++    .then(data => {
++      if (!data.ok) throw new Error(data.error || 'unknown error');
++      toast('Said. The note stays open for whoever answers next.');
++      return load().then(() => {
++        const again = allNotes().find(n => n.id === note.id);
++        if (again && EDIT && EDIT.id === note.id) showFixes(again);
++      });
++    })
++    .catch(err => toast('Not sent: ' + err.message, 6000))
++    .finally(() => { button.disabled = false; });
++}
++
+ function closeSheet() {
+   document.getElementById('quick-save').hidden = true;
+   document.getElementById('sheet').hidden = true;
+@@ -2045,6 +2248,10 @@ function showState() {
+   const open = (META.open || []).length, past = (META.past || []).length;
+   const hidden = (SHOW.past ? 0 : past)
+     + (SHOW.claude ? 0 : (META.claude_notes || []).length);
++  const chip = document.getElementById('fixes-chip');
++  const waiting = allNotes().filter(n => waitingFixes(n).length).length;
++  chip.hidden = !waiting;
++  chip.textContent = 'Fixes (' + waiting + ')';
+   el.innerHTML = META.build.pages + ' pages · built from <b>'
+     + (META.build.commit || 'working tree') + '</b>'
+     + (META.stale ? ' <span class="stale">· the source has moved on</span>' : '')

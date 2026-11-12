@@ -1,0 +1,56 @@
+diff --git a/reader.html b/reader.html
+index 47b6e60..0a3ad24 100644
+--- a/reader.html
++++ b/reader.html
+@@ -377,6 +377,10 @@
+             title="Notes already sent in earlier readings">sent</button>
+     <button class="tool on" data-show="claude" type="button"
+             title="Claude's own notes on this paper">Claude</button>
++    <button class="tool" data-show="answered" type="button"
++            title="Also the sent notes already answered, done or rejected">answered</button>
++    <button class="tool" data-show="fixes" type="button"
++            title="Only the notes with a fix waiting to be chosen">with fixes</button>
+   </span>
+   <span class="sep"></span>
+   <button class="tool" id="ink-save" type="button" hidden>Keep the ink as a note</button>
+@@ -731,19 +735,27 @@ function toPdf(el, clientX, clientY) {
+ // readings and Claude's own set can be turned off, because on a paper that has
+ // been through a few rounds they bury the text they are about.
+ const SHOW_STORE = 'paper-show';
+-let SHOW = {past: true, claude: true};
++// `answered` off: a sent note that is done or rejected is not drawn, so what is
++// on the page is what is still waiting. `fixes` on: only the notes with a fix
++// to choose, which after an answered round is the work there is.
++let SHOW = {past: true, claude: true, answered: false, fixes: false};
+ try {
+   const saved = JSON.parse(localStorage.getItem(SHOW_STORE) || 'null');
+   if (saved) SHOW = Object.assign(SHOW, saved);
+ } catch (err) {}
+ 
++function answered(n) { return n.status === 'done' || n.status === 'rejected'; }
++
+ function allNotes() {
+   if (!META) return [];
+   let out = (META.open || []).slice();
+-  if (SHOW.past) out = out.concat(META.past || []);
++  if (SHOW.past) {
++    out = out.concat((META.past || []).filter(n => SHOW.answered || !answered(n)));
++  }
+   if (SHOW.claude) {
+     out = out.concat((META.claude_notes || []).map(n => Object.assign({claude: true}, n)));
+   }
++  if (SHOW.fixes) out = out.filter(n => waitingFixes(n).length);
+   return out;
+ }
+ 
+@@ -2246,8 +2258,8 @@ function showState() {
+   const el = document.getElementById('state');
+   if (!META || !META.built) { el.textContent = 'not built'; return; }
+   const open = (META.open || []).length, past = (META.past || []).length;
+-  const hidden = (SHOW.past ? 0 : past)
+-    + (SHOW.claude ? 0 : (META.claude_notes || []).length);
++  const every = open + past + (META.claude_notes || []).length;
++  const hidden = every - allNotes().length;
+   const chip = document.getElementById('fixes-chip');
+   const waiting = allNotes().filter(n => waitingFixes(n).length).length;
+   chip.hidden = !waiting;

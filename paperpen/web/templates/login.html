@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>paperpen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="/favicon.svg">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #eef1f5; --paper: #ffffff; --ink: #172b4d; --muted: #5e6c84;
+    --accent: #0079bf; --line: #8883; --wrong: #d93025;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12151b; --paper: #262c38; --ink: #e6e9ef; --muted: #9aa3b2; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink); min-height: 100vh;
+    font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+  }
+  form {
+    background: var(--paper); border-radius: 10px; padding: 1.75rem;
+    width: 100%; max-width: 21rem; box-shadow: 0 1px 3px #0002;
+  }
+  h1 { margin: 0 0 .25rem; font-size: 1.3rem; }
+  p { margin: 0 0 1.25rem; color: var(--muted); font-size: .85rem; line-height: 1.45; }
+  label { display: block; font-size: .8rem; color: var(--muted); margin: 0 0 .3rem; }
+  input {
+    width: 100%; padding: .6rem .7rem; margin: 0 0 1rem; font-size: 1rem;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--ink); font-family: inherit;
+  }
+  input#code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+               letter-spacing: .25em; }
+  button {
+    width: 100%; padding: .65rem; font-size: 1rem; font-family: inherit;
+    border: 0; border-radius: 6px; background: var(--accent); color: #fff;
+    cursor: pointer;
+  }
+  .wrong { color: var(--wrong); font-size: .85rem; margin: 0 0 1rem; }
+  .plain { margin: 1.25rem 0 0; font-size: .75rem; }
+</style>
+
+<form method="post" autocomplete="off">
+  <h1>paperpen</h1>
+  <p>This reader is being served on the network.</p>
+  {% if wrong %}<p class="wrong">{{ wrong }}</p>{% endif %}
+
+  <label for="password">Password</label>
+  <input type="password" id="password" name="password" autocomplete="current-password"
+         autofocus required>
+
+  {% if totp %}
+    <label for="code">Six digits from your authenticator</label>
+    <input type="text" id="code" name="code" inputmode="numeric" pattern="[0-9 ]*"
+           autocomplete="one-time-code" maxlength="7" required>
+  {% endif %}
+
+  <button type="submit">Open</button>
+
+  {# Said on the page itself, not only in the terminal that started it: the
+     person reading on the tablet is the one who needs to know, and they are
+     not looking at the terminal. #}
+  {% if not tls %}
+    <p class="plain">No TLS: this is sent in the clear. Fine on a network you
+      trust, not on conference wifi. <code>paperpen tls</code> fixes it.</p>
+  {% endif %}
+</form>

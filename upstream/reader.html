@@ -1,0 +1,2760 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>{name}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="/favicon.svg">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #eef1f5; --paper: #ffffff; --ink: #172b4d; --muted: #5e6c84;
+    --bar: #dfe3ea; --accent: #0079bf;
+    --science: #d9822b; --language: #0079bf; --question: #6554c0; --todo: #5e6c84;
+    --pen: #d93025; --claude: #00a3bf;
+    --noted: #e8a33d;   /* a sentence that already carries a note */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12151b; --paper: #262c38; --ink: #e6e9ef; --muted: #9aa3b2; --bar: #1c212b; }
+  }
+  * { box-sizing: border-box; }
+  /* Scrolling is the browser's, pinching is not: a pinch zooms the paper,
+     which the page does itself (see pinchZoom), and never the whole page with
+     its bars. pan-x pan-y is the browser's pinch taken away everywhere, the
+     tool bar included, since a touch-action narrows down the tree. */
+  html, body { margin: 0; height: 100%; touch-action: pan-x pan-y; }
+  body {
+    background: var(--bg); color: var(--ink); overscroll-behavior: none;
+    font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: .6rem; padding: .5rem .7rem;
+    background: var(--bar); flex: 0 0 auto; flex-wrap: wrap;
+  }
+  header a.back { color: var(--muted); text-decoration: none; font-size: 1.1rem; }
+  header a.chip {
+    border: 1px solid #8883; background: var(--paper); color: var(--ink);
+    border-radius: 7px; padding: .35rem .7rem; font-size: .78rem; text-decoration: none;
+  }
+  h1 { font-size: .95rem; margin: 0; font-weight: 600; }
+  .state { font-size: .68rem; color: var(--muted); }
+  .state b { color: var(--ink); font-family: ui-monospace, monospace; font-weight: 600; }
+  .stale { color: var(--science); }
+  .grow { flex: 1 1 auto; }
+  header button, .tool, .tag {
+    border: 1px solid #8883; background: var(--paper); color: var(--ink);
+    border-radius: 7px; padding: .35rem .7rem; font: inherit; font-size: .78rem;
+    cursor: pointer; touch-action: manipulation;
+  }
+  header button.go { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+  header button[disabled] { opacity: .5; }
+
+  /* search: the matches drawn where they are, and listed, emacs's occur */
+  #searchbar { display: flex; gap: .4rem; align-items: center; padding: .4rem .7rem;
+               background: var(--bar); border-top: 1px solid #8882; flex: 0 0 auto; }
+  #searchbar[hidden] { display: none; }
+  #searchbar input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: .9rem;
+                     border: 1px solid #8884; border-radius: 8px; padding: .4rem .6rem;
+                     background: var(--paper); color: var(--ink); }
+  #searchbar .count { font-size: .74rem; color: var(--muted); white-space: nowrap; }
+  #searchbar button { border: 1px solid #8883; background: var(--paper); color: var(--ink);
+                      border-radius: 7px; padding: .35rem .7rem; font: inherit; font-size: .78rem;
+                      cursor: pointer; }
+  #searchbar button.on { background: var(--accent); color: #fff; border-color: transparent; }
+  .hitband { position: absolute; pointer-events: none; border-radius: 2px;
+             background: #ffd54f66; box-shadow: inset 0 -2px 0 #f0a500; }
+  .hitband.now { background: #ffb30099; box-shadow: 0 0 0 2px #f0a500; }
+  #occur { position: fixed; z-index: 28; right: .6rem; top: 7.5rem; bottom: .6rem;
+           width: min(26rem, 92vw); overflow: auto; background: var(--paper);
+           border: 1px solid #8884; border-radius: 10px; box-shadow: 0 6px 24px rgba(9,30,66,.3); }
+  #occur[hidden] { display: none; }
+  #occur .row { display: flex; gap: .5rem; padding: .45rem .65rem; font-size: .8rem;
+                line-height: 1.4; border-bottom: 1px solid #8882; cursor: pointer; }
+  #occur .row:hover, #occur .row.now { background: color-mix(in srgb, var(--accent) 10%, var(--paper)); }
+  #occur .pg { flex: 0 0 auto; color: var(--muted); font-size: .68rem; min-width: 2.2rem;
+               font-variant-numeric: tabular-nums; }
+  #occur mark { background: #ffd54f; color: inherit; border-radius: 2px; }
+  #occur .more { padding: .5rem .65rem; font-size: .72rem; color: var(--muted); }
+  .tools {
+    display: flex; align-items: center; gap: .35rem; padding: .4rem .7rem;
+    background: var(--bar); flex: 0 0 auto; overflow-x: auto; border-top: 1px solid #8882;
+  }
+  .tool.on { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+  /* an icon, and a word beside it where there is one. A button keeps its
+     width and its one line: the bar scrolls sideways before a button is
+     squeezed into a stack of single words. */
+  .tools .tool { flex: 0 0 auto; white-space: nowrap; }
+  .tool svg { vertical-align: -3px; }
+  .tool svg + span { margin-left: .3rem; }
+  .tools .sep { width: 1px; height: 1.4rem; background: #8883; flex: 0 0 auto; }
+  /* what a tap picks out, offered only while it means something */
+  .grain { display: flex; gap: .25rem; }
+  .grain[hidden] { display: none; }
+  .hint { font-size: .68rem; color: var(--muted); white-space: nowrap; }
+
+  #pages { flex: 1 1 auto; overflow: auto; padding: .7rem 0 4rem; -webkit-overflow-scrolling: touch; }
+  .page {
+    position: relative; margin: 0 auto .8rem; background: var(--paper);
+    box-shadow: 0 1px 6px rgba(9,30,66,.25); width: var(--w);
+  }
+  .page img { display: block; width: 100%; height: auto; }
+  /* the page is a picture, and a long press on it is ours: not Safari's Save
+     Image callout, nor its magnifier, nor a drag of the image */
+  #pages, .page, .page img, .page canvas {
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  .page canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* the pen needs the surface to itself; in every other mode the finger
+     scrolls and pinches the page as it would any other document */
+  body:not(.pen) .page canvas { pointer-events: none; }
+  /* In pen mode the page still scrolls the way the platform scrolls it,
+     with momentum and pinch, because taking the surface away from the browser
+     is what kills inertia. It is taken away only while the pen is actually
+     near: the S Pen reports hover, so by the time the tip lands the surface is
+     already the pen's. */
+  body.pen .page canvas { touch-action: pan-x pan-y; }
+  body.pen.pen-near .page canvas { touch-action: none; }
+  .pageno {
+    position: absolute; bottom: -1.1rem; right: .2rem; font-size: .6rem; color: var(--muted);
+  }
+  .pin {
+    position: absolute; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--paper);
+    background: var(--todo); color: #fff; font-size: .62rem; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transform: translate(-50%, -50%);
+    box-shadow: 0 1px 3px rgba(0,0,0,.4);
+  }
+  .pin.SCIENCE { background: var(--science); } .pin.LANGUAGE { background: var(--language); }
+  .pin.QUESTION { background: var(--question); }
+  .pin.claude { background: var(--claude); }
+  .pin.done { background: var(--paper); color: var(--muted); border-color: var(--muted); }
+  /* A sentence that carries a note stays marked, in its own colour: the blue
+     wash is what is selected right now, and the two must not look alike. */
+  .band {
+    position: absolute; border-radius: 2px; pointer-events: none;
+    background: color-mix(in srgb, var(--noted) 26%, transparent);
+    box-shadow: inset 0 -1.5px 0 color-mix(in srgb, var(--noted) 75%, transparent);
+  }
+  .band.done {
+    background: color-mix(in srgb, var(--muted) 14%, transparent);
+    box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--muted) 45%, transparent);
+  }
+  .band.claude {
+    background: color-mix(in srgb, var(--claude) 20%, transparent);
+    box-shadow: inset 0 -1.5px 0 color-mix(in srgb, var(--claude) 70%, transparent);
+  }
+
+  #sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--paper);
+    border-radius: 14px 14px 0 0; box-shadow: 0 -2px 20px rgba(9,30,66,.35);
+    padding: .8rem .9rem calc(.9rem + env(safe-area-inset-bottom)); max-height: 82vh; overflow: auto;
+  }
+  #sheet[hidden] { display: none; }
+  /* a note's proposed fixes, in the note itself: one tap puts one in */
+  .sheet-fixes { margin: 0 0 .6rem; display: flex; flex-direction: column; gap: .45rem; }
+  .sheet-fixes[hidden] { display: none; }
+  .sheet-fixes .fx-head { font-size: .68rem; color: var(--muted); text-transform: uppercase;
+                          letter-spacing: .06em; }
+  .fx-card { border: 1px solid #8884; border-radius: 9px; padding: .55rem .65rem;
+             background: var(--bg); }
+  .fx-card.applied { border-color: #1f7a4d; }
+  .fx-card.failed { border-color: var(--pen); }
+  .fx-top { display: flex; align-items: flex-start; gap: .5rem; }
+  .fx-what { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: .85rem; }
+  .fx-by { font-weight: 400; font-size: .65rem; color: var(--muted); margin-left: .3rem; }
+  .fx-why { font-size: .74rem; color: var(--muted); margin: .15rem 0 .3rem; }
+  .fx-file { font-family: ui-monospace, monospace; font-size: .62rem; color: var(--muted);
+             margin-top: .25rem; }
+  .fx-diff { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .78rem;
+             line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+             background: var(--paper); border-radius: 6px; padding: .35rem .5rem; }
+  .fx-diff del { color: #c0392b; background: #c0392b1a; text-decoration: line-through; }
+  .fx-diff ins { color: #1f7a4d; background: #1f7a4d1f; text-decoration: none; }
+  .fx-use { flex: 0 0 auto; border: 0; border-radius: 8px; padding: .5rem .95rem;
+            background: var(--accent); color: #fff; font: inherit; font-size: .82rem;
+            font-weight: 600; cursor: pointer; touch-action: manipulation; }
+  .fx-use[disabled] { opacity: .5; }
+  .fx-badge { flex: 0 0 auto; font-size: .66rem; font-weight: 700; color: #fff;
+              border-radius: 4px; padding: .1rem .4rem; background: #1f7a4d; }
+  .fx-badge.failed { background: var(--pen); }
+  .fx-undo { flex: 0 0 auto; border: 1px solid #8884; border-radius: 8px; padding: .35rem .75rem;
+             background: var(--paper); color: var(--ink); font: inherit; font-size: .78rem;
+             cursor: pointer; touch-action: manipulation; }
+  /* the agent, and what is waiting to be committed, in the header */
+  .agent-said { font-size: .74rem; color: var(--muted); }
+  .agent-said.running { color: var(--accent); font-weight: 600; }
+  .agent-said.failed { color: var(--pen); }
+  .agent-said a { color: inherit; }
+  .fx-problem { font-size: .72rem; color: var(--pen); margin-top: .25rem; }
+  .fx-msg { font-size: .8rem; line-height: 1.4; padding: .4rem .6rem; border-radius: 9px;
+            background: var(--bg); max-width: 92%; }
+  .fx-msg.you { align-self: flex-end; background: color-mix(in srgb, var(--accent) 14%, var(--paper)); }
+  .fx-msg .fx-who { display: block; font-size: .6rem; color: var(--muted); }
+  .fx-reply { display: flex; gap: .4rem; }
+  .fx-reply input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: .82rem;
+                    border: 1px solid #8884; border-radius: 8px; padding: .4rem .55rem;
+                    background: var(--bg); color: var(--ink); }
+  .fx-reply button { border: 1px solid #8883; border-radius: 8px; background: var(--bg);
+                     color: var(--ink); font: inherit; font-size: .8rem; padding: .4rem .8rem;
+                     cursor: pointer; }
+  /* a pin whose note has a fix waiting to be chosen */
+  .pin.has-fix { box-shadow: 0 0 0 3px var(--accent), 0 1px 3px rgba(0,0,0,.4); }
+  /* a note Claude wrote itself, to approve or reject: Claude's colour, square */
+  .pin.proposal { background: var(--claude); border-radius: 5px; }
+  .pin.proposal.done { background: var(--paper); }
+  .fx-card.rejected { opacity: .6; }
+  .fx-badge.rejected { background: var(--muted); }
+  .fx-reply button.fx-reject { color: var(--pen); border-color: color-mix(in srgb, var(--pen) 45%, transparent); }
+  #review-focus { font: inherit; font-size: .78rem; border: 1px solid #8884; border-radius: 8px;
+                  padding: .35rem .55rem; background: var(--bg); color: var(--ink);
+                  min-width: 0; width: 15rem; max-width: 40vw; }
+  #review-focus[hidden] { display: none; }
+  /* the panel's Save, again, where the hand already is: under the tool bar */
+  #quick-save {
+    position: fixed; z-index: 31; border: 0; border-radius: 8px;
+    background: var(--accent); color: #fff; font: inherit; font-size: .85rem;
+    font-weight: 600; padding: .5rem 1.1rem; cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 3px 12px rgba(9,30,66,.35);
+  }
+  #quick-save[hidden] { display: none; }
+  #quick-save[disabled] { opacity: .5; }
+  .sheet-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+  .sheet-head .where { font-size: .7rem; color: var(--muted); font-family: ui-monospace, monospace; }
+  /* stepping through the notes on a paper, in the order they sit on the pages */
+  .sheet-nav { display: flex; align-items: center; gap: .15rem; flex: 0 0 auto; }
+  .sheet-nav[hidden] { display: none; }
+  .sheet-nav button {
+    border: 1px solid #8883; background: var(--bg); color: var(--ink);
+    border-radius: 7px; min-width: 32px; min-height: 30px; font-size: 1rem;
+    cursor: pointer; line-height: 1;
+  }
+  .sheet-nav button[disabled] { opacity: .35; }
+  .sheet-count {
+    font-size: .7rem; color: var(--muted); min-width: 3.2rem; text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .quote {
+    font-size: .78rem; color: var(--muted); border-left: 3px solid #8884;
+    padding: .2rem .6rem; margin: 0 0 .6rem; max-height: 6.5rem; overflow: auto;
+  }
+  /* your own handwriting, read back at the size you wrote it */
+  #sheet-hand {
+    display: block; width: 100%; height: 150px; margin: 0 0 .6rem;
+    background: var(--bg); border: 1px solid #8883; border-radius: 8px;
+  }
+  #sheet-hand[hidden] { display: none; }
+  /* going back into a note's own handwriting, or its ink on the page */
+  .sheet-redo { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap;
+                margin: -.2rem 0 .6rem; }
+  .sheet-redo[hidden] { display: none; }
+  .sheet-redo button {
+    border: 1px solid #8883; background: var(--bg); color: var(--ink);
+    border-radius: 6px; padding: .3rem .7rem; font: inherit; font-size: .75rem; cursor: pointer;
+  }
+  .sheet-redo button[hidden] { display: none; }
+  .sheet-redo .said { font-size: .7rem; color: var(--muted); }
+  .grow-sel { display: flex; gap: .35rem; align-items: center; margin: -.3rem 0 .6rem; }
+  .grow-sel[hidden] { display: none; }
+  .grow-sel button {
+    border: 1px solid #8883; background: var(--bg); color: var(--muted);
+    border-radius: 6px; padding: .2rem .6rem; font: inherit; font-size: .72rem; cursor: pointer;
+  }
+  .grow-sel button:hover { color: var(--ink); }
+  .grow-n { font-size: .7rem; color: var(--muted); }
+  .tags { display: flex; gap: .3rem; flex-wrap: wrap; margin-bottom: .5rem; }
+  .tag.on { color: #fff; border-color: transparent; font-weight: 600; }
+  .tag.on[data-tag=SCIENCE] { background: var(--science); }
+  .tag.on[data-tag=LANGUAGE] { background: var(--language); }
+  .tag.on[data-tag=QUESTION] { background: var(--question); }
+  .tag.on[data-tag=TODO] { background: var(--todo); }
+  .tag.on[data-tag=AUTO] { background: var(--muted); }
+  .pad-foot .tag.on[data-tag=AUTO] { background: var(--muted); }
+  #sheet textarea {
+    width: 100%; min-height: 5.5rem; border: 1px solid #8883; border-radius: 8px;
+    padding: .5rem .6rem; font: inherit; font-size: .9rem; background: var(--bg); color: var(--ink);
+  }
+  .sheet-foot { display: flex; gap: .4rem; align-items: center; margin-top: .6rem; }
+  .sheet-foot .grow { flex: 1 1 auto; }
+  .sheet-foot button { border: 1px solid #8883; background: var(--bg); color: var(--ink);
+    border-radius: 8px; padding: .45rem .9rem; font: inherit; font-size: .85rem; cursor: pointer; }
+  .sheet-foot .save { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+  .sheet-foot .del { color: var(--pen); }
+  .inkmark { font-size: .7rem; color: var(--pen); }
+  /* The writing pad: a place to write about a sentence that does not sit on
+     top of it. Put beside whatever was picked, joined to it by a leader, and
+     moved by its handle when the paper underneath matters more. */
+  #pad {
+    position: absolute; z-index: 25; width: min(420px, 82vw);
+    background: var(--paper); border-radius: 10px; border: 1px solid #8884;
+    box-shadow: 0 6px 24px rgba(9,30,66,.30); touch-action: none;
+  }
+  #pad[hidden] { display: none; }
+  .pad-head {
+    display: flex; align-items: center; gap: .4rem; padding: .35rem .5rem;
+    background: var(--bar); border-radius: 9px 9px 0 0; cursor: grab;
+  }
+  .pad-head:active { cursor: grabbing; }
+  .pad-about {
+    flex: 1 1 auto; min-width: 0; font-size: .7rem; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pad-grip { color: var(--muted); font-size: .8rem; letter-spacing: -2px; }
+  /* what the pen is telling the browser, live: the only way to find out what a
+     given stylus sends for its side button is to look while it is pressed */
+  .pad-pen {
+    font-family: ui-monospace, monospace; font-size: .62rem; color: var(--muted);
+    background: var(--bg); border-radius: 5px; padding: .05rem .3rem; flex: 0 0 auto;
+  }
+  .pad-pen.hot { background: var(--pen); color: #fff; font-weight: 700; }
+  /* a close target a finger can actually hit, on both windows */
+  .pad-x, .vw-x, #sheet-close {
+    border: 1px solid #8883; background: var(--bg); color: var(--muted);
+    font-size: 1.1rem; cursor: pointer; line-height: 1; border-radius: 8px;
+    min-width: 34px; min-height: 30px; padding: 0 .35rem;
+  }
+  .pad-x:hover, #sheet-close:hover { color: var(--pen); border-color: var(--pen); }
+  #pad-canvas {
+    display: block; width: 100%; height: 190px; background: var(--paper);
+    border-top: 1px solid #8882; border-bottom: 1px solid #8882;
+    touch-action: none; cursor: crosshair;
+    /* a ruled sheet, so handwriting stays on a line and reads back */
+    background-image: repeating-linear-gradient(
+      to bottom, transparent 0 37px, #8882 37px 38px);
+  }
+  .pad-foot { display: flex; align-items: center; gap: .35rem; padding: .35rem .5rem; }
+  /* the class is one control that opens the rest: a row of five was most of
+     the footer, for something that is usually left alone */
+  #pad-tag {
+    flex: 1 1 auto; min-width: 0; border: 1px solid #8883; border-radius: 7px;
+    background: var(--bg); color: var(--ink); font: inherit; font-size: .75rem;
+    padding: .3rem .4rem; min-height: 34px;
+  }
+  .pad-acts { display: flex; gap: .25rem; flex: 0 0 auto; }
+  .pad-acts button {
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid #8883; background: var(--bg); color: var(--muted);
+    border-radius: 8px; min-width: 40px; min-height: 34px; cursor: pointer;
+  }
+  .pad-acts button:hover { color: var(--ink); }
+  .pad-acts #pad-clear:hover { color: var(--pen); border-color: var(--pen); }
+  .pad-acts .save {
+    background: var(--accent); color: #fff; border-color: transparent; min-width: 52px;
+  }
+  #pad.empty .save { opacity: .5; }
+  /* Writing or rubbing out, said plainly, because a pen's side button cannot
+     be relied on: it reports differently from device to device and on some it
+     reports nothing at all. The button still works where it works, and moves
+     these buttons when it does. */
+  .pad-mode { display: flex; gap: .2rem; flex: 0 0 auto; }
+  .pad-mode[hidden] { display: none; }
+  .pad-mode .pm {
+    display: flex; align-items: center; gap: .25rem; border: 1px solid #8883;
+    background: var(--bg); color: var(--muted); border-radius: 7px;
+    padding: .25rem .5rem; font: inherit; font-size: .7rem; cursor: pointer;
+    min-height: 32px;
+  }
+  .pad-mode .pm.on {
+    background: var(--pen); color: #fff; border-color: transparent; font-weight: 600;
+  }
+  .pad-mode .pm[data-mode="write"].on { background: var(--accent); }
+  #pad-canvas.erasing { cursor: cell; background-color: color-mix(in srgb, var(--pen) 5%, var(--paper)); }
+
+  /* a corner big enough for a finger, since this is used on a tablet */
+  .pad-grip-corner {
+    position: absolute; right: 0; bottom: 0; width: 26px; height: 26px;
+    cursor: nwse-resize; touch-action: none; z-index: 2;
+    background: linear-gradient(135deg, transparent 52%, var(--muted) 52%,
+                                var(--muted) 62%, transparent 62%,
+                                transparent 72%, var(--muted) 72%,
+                                var(--muted) 82%, transparent 82%);
+    opacity: .5; border-radius: 0 0 9px 0;
+  }
+  .pad-grip-corner:hover { opacity: .9; }
+  #toast {
+    position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); z-index: 40;
+    background: var(--ink); color: var(--bg); padding: .5rem .9rem; border-radius: 999px;
+    font-size: .8rem; max-width: 90vw;
+  }
+  #toast[hidden] { display: none; }
+  #pages .empty { padding: 2rem; text-align: center; color: var(--muted); font-size: .9rem; }
+</style>
+
+<header>
+  <a class="back" href="/" title="Back to the board">&larr;</a>
+  <h1>{name}</h1>
+  <span class="state" id="state">loading</span>
+  <span class="grow"></span>
+  <a class="chip" href="/paper/{pid}/versions"
+     title="This paper as it was, and what changed since">Versions</a>
+  <a class="chip" href="/paper/{pid}/edit"
+     title="Write the source, with the build beside it">Edit</a>
+  <a class="chip" id="fixes-chip" href="/paper/{pid}/feedback" hidden
+     title="Every fix proposed for this paper's notes, to choose from">Fixes</a>
+  <span class="agent-said" id="agent-said" hidden></span>
+  <button id="ask-agent" type="button" hidden
+          title="the agent answers the newest round: applies what leaves no choice, proposes the rest">Ask claude</button>
+  <input id="review-focus" type="text" hidden autocomplete="off"
+         placeholder="what to look for (optional): clarity, notation…">
+  <button id="ask-review" type="button" hidden
+          title="the agent reads the paper first and writes notes of its own, each with its fix, for you to approve or reject">Review</button>
+  <button id="commit" type="button" hidden
+          title="Commit what the applied fixes changed, and nothing else">Commit</button>
+  <button id="commit-branch" type="button" hidden
+          title="The same, on a branch of its own, to be taken or dropped">on a branch</button>
+  <button id="take" type="button" hidden title="Merge this review branch into the one it came from">Take it</button>
+  <button id="drop" type="button" hidden title="Go back to where this branch came from, and delete it">Drop it</button>
+  <button id="rebuild" type="button">Rebuild</button>
+  <button class="go" id="finish" type="button">Finish and send</button>
+</header>
+
+<div class="tools">
+  <button class="tool on" data-tool="read" type="button">Read</button>
+  <button class="tool" data-tool="note" type="button">Note</button>
+  <button class="tool" data-tool="pen" type="button">Pen</button>
+  <span class="grain" id="grain" hidden>
+    <button class="tool" data-grain="sentence" type="button">sentence</button>
+    <button class="tool" data-grain="word" type="button">word</button>
+  </span>
+  <span class="pad-mode" id="tool-mode" hidden>
+    <button class="pm on" data-mode="write" type="button" title="Write">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+        <path d="M3 17.3V21h3.7L17.6 10.1l-3.7-3.7L3 17.3zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.7 3.7L20.7 7z"
+              fill="currentColor"/>
+      </svg><span>pen</span>
+    </button>
+    <button class="pm" data-mode="erase" type="button" title="Rub out">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+        <path d="M16.2 3.5a2 2 0 0 0-2.8 0L3.5 13.4a2 2 0 0 0 0 2.8l4.3 4.3H14l6.5-6.5a2 2 0 0 0 0-2.8l-4.3-7.7z"
+              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M9.4 7.6 16.4 14.6" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M8 21h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg><span>rub</span>
+    </button>
+  </span>
+  <span class="sep"></span>
+  <button class="tool" id="find-btn" type="button" title="Search the paper (/ or Ctrl+F)" aria-label="Search"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+  <button class="tool" id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5M8 10.5h5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+  <span class="hint" id="zoom-label">fit</span>
+  <button class="tool" id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5M8 10.5h5M10.5 8v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+  <span class="sep"></span>
+  <span class="grain" id="shows">
+    <button class="tool on" data-show="past" type="button"
+            title="Notes already sent in earlier readings">sent</button>
+    <button class="tool on" data-show="claude" type="button"
+            title="Claude's own notes on this paper, and its proposals">Claude</button>
+    <button class="tool" data-show="proposals" type="button"
+            title="Only Claude's proposals still to approve or reject">proposals</button>
+    <button class="tool" data-show="answered" type="button"
+            title="Also the sent notes already answered, done or rejected">answered</button>
+    <button class="tool" data-show="fixes" type="button"
+            title="Only the notes with a fix waiting to be chosen">with fixes</button>
+  </span>
+  <span class="sep"></span>
+  <button class="tool" id="ink-save" type="button" hidden>Keep the ink as a note</button>
+  <button class="tool" id="ink-undo" type="button" hidden
+          title="Take back the last stroke or rub-out"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 7H15a5 5 0 0 1 0 10H8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 4 8.5 7 12 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Undo</span></button>
+  <button class="tool" id="ink-clear" type="button" hidden
+          title="Take the ink off the page"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Clear</span></button>
+  <span class="hint" id="hint">Read: scroll and pinch as usual</span>
+</div>
+
+<div id="searchbar" hidden>
+  <input id="q" type="search" autocomplete="off" spellcheck="false"
+         placeholder="search the paper: words in any order, !word to leave one out">
+  <span class="count" id="q-count"></span>
+  <button type="button" id="q-prev" title="The match before (Shift+Enter)">&uarr;</button>
+  <button type="button" id="q-next" title="The next match (Enter)">&darr;</button>
+  <button type="button" id="q-list" title="Every match, listed">list</button>
+  <button type="button" id="q-close" title="Close (Esc)">&times;</button>
+</div>
+<div id="pages"><div class="empty">loading the paper</div></div>
+<aside id="occur" hidden></aside>
+
+<div id="pad" hidden>
+  <div class="pad-head" id="pad-head">
+    <span class="pad-about" id="pad-about"></span>
+    <span class="pad-pen" id="pad-pen" title="What the pen is reporting to the browser"></span>
+    <span class="pad-grip" title="Drag to move">&#8942;&#8942;</span>
+    <button class="pad-x" id="pad-close" type="button" title="Close">&times;</button>
+  </div>
+  <canvas id="pad-canvas"></canvas>
+  <div class="pad-grip-corner" id="pad-resize" title="Drag to resize"></div>
+  <div class="pad-foot">
+    <span class="pad-mode" id="pad-mode">
+      <button class="pm on" data-mode="write" type="button" title="Write">
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+          <path d="M3 17.3V21h3.7L17.6 10.1l-3.7-3.7L3 17.3zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.7 3.7L20.7 7z"
+                fill="currentColor"/>
+        </svg><span>pen</span>
+      </button>
+      <button class="pm" data-mode="erase" type="button" title="Rub out">
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+          <path d="M16.2 3.5a2 2 0 0 0-2.8 0L3.5 13.4a2 2 0 0 0 0 2.8l4.3 4.3H14l6.5-6.5a2 2 0 0 0 0-2.8l-4.3-7.7z"
+                fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M9.4 7.6 16.4 14.6" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M8 21h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg><span>rub</span>
+      </button>
+    </span>
+    <select id="pad-tag" title="What kind of note this is">
+      <option value="AUTO" selected>auto</option>
+      <option value="SCIENCE">science</option>
+      <option value="LANGUAGE">language</option>
+      <option value="QUESTION">question</option>
+      <option value="TODO">todo</option>
+    </select>
+    <span class="pad-acts">
+      <button id="pad-undo" type="button" title="Undo the last stroke or rub-out">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M9 7H15a5 5 0 0 1 0 10H8" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round"/>
+          <path d="M12 4 8.5 7 12 10" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button id="pad-clear" type="button" title="Throw this note away">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13" fill="none" stroke="currentColor"
+                stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="save" id="pad-save" type="button" title="Keep this note">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M4 12.5 9.5 18 20 6.5" fill="none" stroke="currentColor"
+                stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </span>
+  </div>
+</div>
+
+<div id="sheet" hidden>
+  <div class="sheet-head">
+    <button class="pad-x" id="sheet-close" type="button" title="Close">&times;</button>
+    <span class="sheet-nav" id="sheet-nav" hidden>
+      <button id="sheet-prev" type="button" title="The note before this one">&lsaquo;</button>
+      <span class="sheet-count" id="sheet-count"></span>
+      <button id="sheet-next" type="button" title="The note after this one">&rsaquo;</button>
+    </span>
+    <strong id="sheet-title">Note</strong>
+    <span class="where" id="sheet-where"></span>
+    <span class="grow"></span>
+    <span class="inkmark" id="sheet-ink" hidden>with ink</span>
+  </div>
+  <blockquote class="quote" id="sheet-quote"></blockquote>
+  <canvas id="sheet-hand" hidden></canvas>
+  <div class="sheet-fixes" id="sheet-fixes" hidden></div>
+  <div class="sheet-redo" id="sheet-redo" hidden>
+    <button type="button" id="sheet-rewrite" title="Open the pad with this handwriting in it">Change the handwriting</button>
+    <button type="button" id="sheet-reink" title="Take up this ink on the page again">Change the ink</button>
+    <span class="said" id="sheet-redo-said"></span>
+  </div>
+  <div class="grow-sel" id="sheet-grow" hidden>
+    <button type="button" data-grow="-1">&minus; sentence</button>
+    <button type="button" data-grow="1">+ sentence</button>
+    <button type="button" id="sheet-widen" hidden>the whole sentence</button>
+    <span class="grow-n" id="sheet-seln"></span>
+  </div>
+  <div class="tags" id="sheet-tags">
+    <button class="tag" data-tag="AUTO" type="button"
+            title="Let the pass that reads the notes decide">Auto</button>
+    <button class="tag" data-tag="SCIENCE" type="button">Science</button>
+    <button class="tag" data-tag="LANGUAGE" type="button">Language</button>
+    <button class="tag" data-tag="QUESTION" type="button">Question</button>
+    <button class="tag" data-tag="TODO" type="button">Todo</button>
+  </div>
+  <textarea id="sheet-text" placeholder="What should change here. Write with the pen straight into this box, or type."></textarea>
+  <div class="sheet-foot">
+    <button class="del" id="sheet-del" type="button">Delete</button>
+    <span class="grow"></span>
+    <button id="sheet-cancel" type="button">Close</button>
+    <button class="save" id="sheet-save" type="button">Save</button>
+  </div>
+</div>
+
+<button id="quick-save" type="button" hidden title="Keep this note">Save</button>
+
+<div id="toast" hidden></div>
+
+<script>
+const PID = "{pid}";
+const CUSTOM_BUILD = "{custom_build}" === "1";
+const TAGS = ["SCIENCE", "LANGUAGE", "QUESTION", "TODO"];
+let META = null, TOOL = "read", EDIT = null, PENDING = [];
+const LAYOUT = {};  // page -> its sentences, its words and its figures
+let GRAIN = 'sentence';  // what a tap picks out: a sentence or a single word
+let SEL = null;       // what the note being written is about
+// The zoom is continuous, as a pinch is, and counted from the width that fits
+// the screen: 1 is fit. The buttons are steps along it.
+let ZSCALE = 1;
+const ZMIN = 0.5, ZMAX = 4, ZSTEP = 1.25;
+
+function toast(msg, ms) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => { el.hidden = true; }, ms || 2600);
+}
+
+function postJSON(url, body) {
+  return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                     body: JSON.stringify(body || {})}).then(r => r.json());
+}
+
+// --- laying the pages out -------------------------------------------------
+// One image per page at the size the PDF says, so a coordinate on screen is a
+// coordinate in the document with one multiplication and no guessing.
+function pageWidth() {
+  return Math.min(window.innerWidth - 16, 1100) * ZSCALE;
+}
+
+function zoomLabel() {
+  return Math.abs(ZSCALE - 1) < 0.01 ? 'fit' : Math.round(ZSCALE * 100) + '%';
+}
+
+// the sentences of a page are fetched as it comes into view: by the time a
+// finger lands on one they are there, and a paper nobody scrolls to costs
+// nothing
+const pageWatch = ('IntersectionObserver' in window) ? new IntersectionObserver(
+  (entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) loadLayout(Number(e.target.dataset.page));
+    }
+  }, {rootMargin: '400px'}) : null;
+
+function render() {
+  const host = document.getElementById('pages');
+  if (!META || !META.built) {
+    host.innerHTML = '<div class="empty">Nothing built yet.<br>'
+      + 'Run <code>scripts/paper.py build ' + PID + '</code>, or press Rebuild.</div>';
+    return;
+  }
+  const w = pageWidth();
+  host.innerHTML = '';
+  META.build.sizes.forEach((size, i) => {
+    const n = i + 1;
+    const el = document.createElement('div');
+    el.className = 'page';
+    el.dataset.page = n;
+    el.style.setProperty('--w', w + 'px');
+    el.style.aspectRatio = size[0] + ' / ' + size[1];
+    el.innerHTML =
+      '<img draggable="false" loading="' + (n <= 2 ? 'eager' : 'lazy') + '" alt="page ' + n + '" '
+      + 'src="/paper/' + PID + '/page/' + n + '.png?scale=2&v='
+        + encodeURIComponent(META.build.at) + '">'
+      + '<canvas></canvas><span class="pageno">' + n + ' / ' + META.build.pages + '</span>';
+    if (pageWatch) pageWatch.observe(el);
+    const cv = el.querySelector('canvas');
+    cv.addEventListener('pointerdown', (ev) => penDown(ev, el));
+    cv.addEventListener('pointermove', (ev) => penMove(ev, el));
+    cv.addEventListener('pointerup', penUp);
+    cv.addEventListener('pointercancel', penCancel);
+    host.appendChild(el);
+  });
+  relayout();
+}
+
+// Resizing and zooming must not rebuild the pages: throwing the <img> elements
+// away and making new ones blanks the paper until each one decodes again, on
+// every rotation and every time the keyboard comes up. Only the width changes.
+function relayout() {
+  const w = pageWidth();
+  for (const el of document.querySelectorAll('.page')) el.style.setProperty('--w', w + 'px');
+  document.getElementById('zoom-label').textContent = zoomLabel();
+  drawAll();
+  placePins();
+}
+
+// The page's own text, cut into sentences by the board. Fetched as a page
+// comes into view, because a note has to be about a sentence and a tap has to
+// know which one without a round trip in the way.
+function loadLayout(page) {
+  if (LAYOUT[page]) return Promise.resolve(LAYOUT[page]);
+  LAYOUT[page] = {sentences: [], words: [], figures: []};  // claim it
+  return fetch('/paper/' + PID + '/layout/' + page)
+    .then(r => r.json())
+    .then(d => {
+      LAYOUT[page] = {sentences: d.sentences || [], words: d.words || [],
+                      figures: d.figures || []};
+      drawAll();
+      return LAYOUT[page];
+    })
+    .catch(() => LAYOUT[page]);
+}
+const layoutOf = (page) => LAYOUT[page] || {sentences: [], words: [], figures: []};
+
+// the sentence a point is on, or the nearest within a line's reach
+function sentenceAt(page, x, y) {
+  let best = null, gap = 1e9;
+  for (const s of layoutOf(page).sentences) {
+    for (const r of s.rects) {
+      if (x >= r[0] - 2 && x <= r[2] + 2 && y >= r[1] - 1 && y <= r[3] + 1) return s;
+      const dy = y < r[1] ? r[1] - y : (y > r[3] ? y - r[3] : 0);
+      const dx = x < r[0] ? r[0] - x : (x > r[2] ? x - r[2] : 0);
+      const d = dy + 0.3 * dx;
+      if (d < gap) { gap = d; best = s; }
+    }
+  }
+  return gap < 12 ? best : null;
+}
+
+// a word is a small target, so a near miss on the same line still counts
+function wordAt(page, x, y) {
+  let best = null, gap = 1e9;
+  for (const w of layoutOf(page).words) {
+    const r = w.r;
+    if (x >= r[0] - 1 && x <= r[2] + 1 && y >= r[1] && y <= r[3]) return w;
+    const dy = y < r[1] ? r[1] - y : (y > r[3] ? y - r[3] : 0);
+    const dx = x < r[0] ? r[0] - x : (x > r[2] ? x - r[2] : 0);
+    const d = dx + 3 * dy;   // the line matters more than the column
+    if (d < gap) { gap = d; best = w; }
+  }
+  return gap < 10 ? best : null;
+}
+
+// figures are tried after the text: a band drawn a little generously must
+// never take a tap away from the paragraph beside it
+function figureAt(page, x, y) {
+  for (const f of layoutOf(page).figures) {
+    const r = f.rect;
+    if (x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]) return f;
+  }
+  return null;
+}
+
+// What a press picks out, by the grain in force: the same rule in Note mode
+// and in Pen mode, so what a tap means never depends on which tool is up.
+function pickUnderFinger(el, clientX, clientY) {
+  const n = Number(el.dataset.page);
+  const [x, y] = toPdf(el, clientX, clientY);
+  const word = GRAIN === 'word' ? wordAt(n, x, y) : null;
+  const sent = word ? null : sentenceAt(n, x, y);
+  if (word) {
+    SEL = {page: n, kind: 'word', rects: [word.r], text: word.t, sentence: word.s};
+  } else if (sent) {
+    SEL = {page: n, kind: 'sentence', from: sent.i, to: sent.i};
+  } else {
+    const fig = figureAt(n, x, y);
+    if (!fig) { SEL = null; drawAll(); return null; }
+    SEL = {page: n, kind: 'figure', rects: [fig.caption_rect], band: fig.rect,
+           text: fig.caption, label: fig.label};
+  }
+  drawAll();
+  return SEL;
+}
+
+function selectedSentences() {
+  if (!SEL || SEL.kind !== 'sentence') return [];
+  const list = layoutOf(SEL.page).sentences;
+  const lo = Math.min(SEL.from, SEL.to), hi = Math.max(SEL.from, SEL.to);
+  return list.filter(s => s.i >= lo && s.i <= hi);
+}
+
+function selectionRects() {
+  if (!SEL) return [];
+  if (SEL.kind === 'sentence') {
+    return selectedSentences().reduce((all, s) => all.concat(s.rects), []);
+  }
+  return SEL.rects || [];
+}
+
+function selectionText() {
+  if (!SEL) return '';
+  if (SEL.kind === 'sentence') return selectedSentences().map(s => s.text).join(' ');
+  return SEL.text || '';
+}
+
+// The line from the pad to the sentence it is about. Orthogonal, never
+// diagonal, which is the house style for a note joined to its line: see
+// scripts/annotate-paper.py, which draws the same join on paper.
+function drawLeader(g, el, k) {
+  if (pad.hidden || !padTarget || padTarget.page !== Number(el.dataset.page)) return;
+  const rects = selectionRects();
+  if (!rects.length) return;
+  const box = el.getBoundingClientRect();
+  const p = pad.getBoundingClientRect();
+  // from the middle of the pad's nearest edge, to the near corner of the text
+  const anchorY = (Math.min(...rects.map(r => r[1])) + Math.max(...rects.map(r => r[3]))) / 2;
+  const anchorX = pad.offsetLeft > box.left + box.width / 2
+    ? Math.max(...rects.map(r => r[2])) : Math.min(...rects.map(r => r[0]));
+  const fromX = (p.left + p.width / 2 - box.left) / k;
+  const fromY = (p.top < box.top + anchorY * k ? p.bottom : p.top) - box.top;
+  g.save();
+  g.strokeStyle = 'rgba(0,121,191,.75)';
+  g.lineWidth = 1.6;
+  g.setLineDash([5, 4]);
+  g.beginPath();
+  g.moveTo(anchorX * k, anchorY * k);
+  g.lineTo(fromX * k, anchorY * k);     // across, then down: never a diagonal
+  g.lineTo(fromX * k, fromY);
+  g.stroke();
+  g.setLineDash([]);
+  g.beginPath();
+  g.arc(anchorX * k, anchorY * k, 3.5, 0, 6.29);
+  g.fillStyle = 'rgba(0,121,191,.9)';
+  g.fill();
+  g.restore();
+}
+
+// page coordinates <-> PDF points. The image is the page, so it is one scale.
+function scaleOf(el) {
+  const size = META.build.sizes[el.dataset.page - 1];
+  return size[0] / el.getBoundingClientRect().width;
+}
+function toPdf(el, clientX, clientY) {
+  const box = el.getBoundingClientRect();
+  const k = scaleOf(el);
+  return [(clientX - box.left) * k, (clientY - box.top) * k];
+}
+
+// What is drawn on the pages. This reading's notes are always there; earlier
+// readings and Claude's own set can be turned off, because on a paper that has
+// been through a few rounds they bury the text they are about.
+const SHOW_STORE = 'paper-show';
+// `answered` off: a sent note that is done or rejected is not drawn, so what is
+// on the page is what is still waiting. `fixes` on: only the notes with a fix
+// to choose, which after an answered round is the work there is.
+let SHOW = {past: true, claude: true, answered: false, fixes: false, proposals: false};
+// who writes notes of their own and answers rounds: claude, or codex. META says
+// which are agents and which one runs for this paper; the names are what their
+// notes and fixes are signed with.
+function isAgent(by) { return !!by && ((META && META.agents) || ['claude']).indexOf(by) >= 0; }
+function runnerName() { return (META && META.agent && META.agent.runner) || 'claude'; }
+try {
+  const saved = JSON.parse(localStorage.getItem(SHOW_STORE) || 'null');
+  if (saved) SHOW = Object.assign(SHOW, saved);
+} catch (err) {}
+
+function answered(n) { return n.status === 'done' || n.status === 'rejected'; }
+
+function allNotes() {
+  if (!META) return [];
+  let out = (META.open || []).slice();
+  if (SHOW.past) {
+    out = out.concat((META.past || []).filter(n => SHOW.answered || !answered(n)));
+  }
+  if (SHOW.claude) {
+    out = out.concat((META.claude_notes || []).map(n => Object.assign({claude: true}, n)));
+  }
+  if (SHOW.fixes) out = out.filter(n => waitingFixes(n).length);
+  // the agent's proposals are sent notes with an author: the Claude chip hides
+  // them with the rest of Claude's, `proposals` shows nothing else
+  if (!SHOW.claude) out = out.filter(n => !isAgent(n.by));
+  if (SHOW.proposals) out = out.filter(n => isAgent(n.by) && !answered(n));
+  return out;
+}
+
+function setShow(what, on) {
+  SHOW[what] = on;
+  try { localStorage.setItem(SHOW_STORE, JSON.stringify(SHOW)); } catch (err) {}
+  for (const b of document.querySelectorAll('#shows .tool')) {
+    b.classList.toggle('on', !!SHOW[b.dataset.show]);
+  }
+  placePins();
+  drawAll();
+  showState();
+}
+
+function placePins() {
+  for (const el of document.querySelectorAll('.page')) {
+    for (const old of el.querySelectorAll('.pin, .band')) old.remove();
+  }
+  // two notes on the same sentence would put their pins in the same place and
+  // one would be unreachable, so each is nudged clear of the one before it
+  const taken = [];
+  allNotes().forEach((n, i) => {
+    const el = document.querySelector('.page[data-page="' + n.page + '"]');
+    if (!el) return;
+    const size = META.build.sizes[n.page - 1];
+    const pc = (v, total) => (100 * v / total) + '%';
+    // a sentence that wraps gets a band per line, not one block over the lot
+    for (const r of (n.rects && n.rects.length ? n.rects : [n.rect])) {
+      const band = document.createElement('div');
+      band.className = 'band' + (n.claude || isAgent(n.by) ? ' claude' : '')
+        + (n.status === 'done' ? ' done' : '');
+      band.style.left = pc(r[0], size[0]);
+      band.style.top = pc(r[1], size[1]);
+      band.style.width = pc(Math.max(r[2] - r[0], 3), size[0]);
+      band.style.height = pc(Math.max(r[3] - r[1], 3), size[1]);
+      el.appendChild(band);
+    }
+    const pin = document.createElement('button');
+    pin.className = 'pin ' + (n.claude ? 'claude' : n.tag) + (n.status === 'done' ? ' done' : '')
+      + (waitingFixes(n).length ? ' has-fix' : '') + (isAgent(n.by) ? ' proposal' : '');
+    pin.textContent = n.claude ? 'C' : (i + 1);
+    let px = n.rect[2], py = (n.rect[1] + n.rect[3]) / 2;
+    while (taken.some(t => t.page === n.page
+                           && Math.abs(t.x - px) < 13 && Math.abs(t.y - py) < 13)) {
+      px += 13;                       // along the line first, then under it
+      if (px > size[0] - 8) { px = n.rect[2]; py += 13; }
+    }
+    taken.push({page: n.page, x: px, y: py});
+    pin.style.left = pc(px, size[0]);
+    pin.style.top = pc(py, size[1]);
+    pin.title = (n.note || 'handwritten').slice(0, 120);
+    pin.onclick = (e) => { e.stopPropagation(); openNote(n); };
+    el.appendChild(pin);
+  });
+}
+
+// --- ink ------------------------------------------------------------------
+// Strokes are kept in PDF points, so they survive a zoom, a rebuild at another
+// size, and the trip to the page crop the export writes.
+let stroke = null, strokePage = null, pan = null;
+// A note whose ink has been taken up again: its strokes are PENDING while that
+// lasts, and it is not drawn from the note as well, or a stroke rubbed out
+// would still be there underneath.
+let INK_EDIT = null;
+// What the ink was before each stroke and each rub-out, so undo takes back
+// either. Snapshots of the list rather than of the strokes: a finished stroke
+// is never changed, only added or taken away, so sharing them is safe.
+let INK_UNDO = [];
+const UNDO_DEPTH = 200;
+
+function remember(stack, strokes) {
+  stack.push(strokes.slice());
+  if (stack.length > UNDO_DEPTH) stack.shift();
+}
+
+function showInkButtons(on) {
+  for (const id of ['ink-save', 'ink-undo', 'ink-clear']) {
+    document.getElementById(id).hidden = !on;
+  }
+}
+
+// Only the pages near the screen have a canvas the size of the page. iPad
+// Safari caps the memory of all canvases on a page, around 384 MB, and past it
+// a canvas is silently blank: a paper of twenty pages at the iPad's density
+// was most of that, a zoom took it past, and ink was written where it did not
+// show. A page far away gives its memory back and gets it again on the way.
+const MOST_PIXELS = 8e6;
+
+function nearScreen(box) {
+  const reach = window.innerHeight;
+  return box.bottom > -reach && box.top < window.innerHeight + reach;
+}
+
+function drawAll() {
+  for (const el of document.querySelectorAll('.page')) {
+    const cv = el.querySelector('canvas');
+    const box = el.getBoundingClientRect();
+    if (!box.width) continue;
+    if (!nearScreen(box)) {
+      if (cv.width > 1) { cv.width = 1; cv.height = 1; }
+      continue;
+    }
+    // and no canvas past Safari's own ceiling for one, about 16.7 million
+    // pixels: zoomed far in, the ink is drawn a little softer rather than not
+    // drawn at all
+    const dpr = Math.min(window.devicePixelRatio || 1,
+                         Math.sqrt(MOST_PIXELS / (box.width * box.height)));
+    cv.width = box.width * dpr;
+    cv.height = box.height * dpr;
+    const g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, box.width, box.height);
+    const k = 1 / scaleOf(el);
+    const paint = (strokes, color) => {
+      g.strokeStyle = color; g.lineWidth = 2; g.lineCap = 'round'; g.lineJoin = 'round';
+      for (const st of strokes || []) {
+        const pts = (st || []).filter(
+          p => p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+        if (!pts.length) continue;
+        g.beginPath();
+        pts.forEach((p, i) => i ? g.lineTo(p[0] * k, p[1] * k)
+                                : g.moveTo(p[0] * k, p[1] * k));
+        g.stroke();
+      }
+    };
+    for (const n of allNotes()) {
+      if (INK_EDIT && n.id === INK_EDIT.id) continue;
+      if (n.page == el.dataset.page && n.ink && n.ink.length) {
+        paint(n.ink, n.status === 'done' ? 'rgba(120,130,150,.7)' : 'rgba(217,48,37,.85)');
+      }
+    }
+    if (Number(el.dataset.page) === strokePage) paint(PENDING, 'rgba(217,48,37,.95)');
+    // what is about to be noted
+    if (SEL && SEL.page === Number(el.dataset.page)) {
+      if (SEL.kind === 'figure' && SEL.band) {
+        const b = SEL.band;
+        g.strokeStyle = 'rgba(0,121,191,.85)';
+        g.lineWidth = 2;
+        g.strokeRect(b[0] * k, b[1] * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k);
+        g.fillStyle = 'rgba(0,121,191,.10)';
+        g.fillRect(b[0] * k, b[1] * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k);
+      }
+      g.fillStyle = 'rgba(0,121,191,.22)';
+      for (const r of selectionRects()) {
+        g.fillRect(r[0] * k, r[1] * k, (r[2] - r[0]) * k, (r[3] - r[1]) * k);
+      }
+      drawLeader(g, el, k);
+    }
+  }
+}
+
+function penDown(e, el) {
+  if (TOOL !== 'pen') return;
+  const host = document.getElementById('pages');
+  // The pen draws; the finger pans, and a press that does not travel picks
+  // out what the ink is going to be about. A palm on the glass never puts a
+  // line through the paper either way.
+  if (e.pointerType === 'touch') {
+    if (isPalm(e)) return;   // a hand resting while the pen writes
+    // While the pen is near, the surface is locked to it and a finger drag has
+    // to be panned by hand. The rest of the time the browser is doing the
+    // scrolling itself, inertia and all, and must not be fought over.
+    const locked = document.body.classList.contains('pen-near');
+    pan = {x: e.clientX, y: e.clientY, left: host.scrollLeft, top: host.scrollTop,
+           at: Date.now(), page: Number(el.dataset.page), el: el, moved: 0,
+           drag: locked};
+    return;
+  }
+  if (isEraser(e)) {
+    // the button rubs out marks made on the page, the same as in the pad
+    e.preventDefault();
+    const [x, y] = toPdf(el, e.clientX, e.clientY);
+    const reach = ERASER_R * scaleOf(el);
+    const [kept, changed] = rubOut(PENDING, x, y, reach);
+    if (changed) {
+      remember(INK_UNDO, PENDING);
+      PENDING = kept;
+      // rubbing out all of a note's ink is a change to keep, not a clear
+      if (!PENDING.length && !INK_EDIT) clearInk(); else drawAll();
+    }
+    return;
+  }
+  if (strokePage && Number(el.dataset.page) !== strokePage) {
+    toast('Keep or clear the ink before marking another page');
+    return;
+  }
+  e.preventDefault();
+  strokePage = Number(el.dataset.page);
+  stroke = [toPdf(el, e.clientX, e.clientY)];
+  remember(INK_UNDO, PENDING);
+  PENDING.push(stroke);
+  try { el.querySelector('canvas').setPointerCapture(e.pointerId); } catch (err) {}
+}
+
+function penMove(e, el) {
+  if (pan && e.pointerType === 'touch') {
+    pan.moved = Math.max(pan.moved,
+      Math.abs(e.clientX - pan.x) + Math.abs(e.clientY - pan.y));
+    if (pan.drag) {
+      const host = document.getElementById('pages');
+      host.scrollLeft = pan.left - (e.clientX - pan.x);
+      host.scrollTop = pan.top - (e.clientY - pan.y);
+    }
+    return;
+  }
+  if (!stroke || e.pointerType === 'touch') return;
+  e.preventDefault();
+  const [px, py] = toPdf(el, e.clientX, e.clientY);
+  if (addPoint(stroke, px, py)) drawAll();
+}
+
+const TAP_SLOP = 10;    // px a finger may wander and still count as a press
+// px of contact above which a touch is a hand, not a tip. iPad Safari reports a
+// fingertip as 40 to 70 across, which at 38 made every finger a palm and every
+// tap nothing; a resting palm is well past 90 on any tablet.
+const PALM_SIZE = 90;
+const PEN_GRACE = 1600; // ms after the pen was last seen that touch is ignored
+let lastPenAt = 0;
+
+// A hand resting on the glass is a big soft contact, and it arrives while the
+// pen is in play. Either sign is enough to ignore it: the alternative is that
+// putting your hand down to write closes what you were writing in.
+function isPalm(e) {
+  if (e.pointerType !== 'touch') return false;
+  if (Date.now() - lastPenAt < PEN_GRACE) return true;
+  return Math.max(e.width || 0, e.height || 0) > PALM_SIZE;
+}
+
+// The S Pen's side button is the eraser, and it says so the way the spec says:
+// pointerType "pen" with the barrel bit set, or "eraser" outright on the
+// devices that report it that way. Held down, the pen rubs out instead of
+// writing, which is what the button does everywhere else on the tablet.
+const ERASER_R = 16;   // px around the tip that is rubbed out
+// The button values this pen sends when it is only writing. Filled from the
+// first contacts of a session and never emptied: a pen that always says 2 has
+// 2 as its resting state, and its button will say something else.
+const penBaseline = new Set();
+penBaseline.calibrating = true;
+let penContacts = 0;
+
+function learnPen(e) {
+  if (e.pointerType !== 'pen' || !e.buttons) return;
+  if (penContacts < 3) {      // the first few contacts of a session set it
+    penBaseline.add(e.buttons);
+  }
+}
+
+const MODE_STORE = 'paper-pen-mode';
+let PEN_MODE = 'write';
+try { PEN_MODE = localStorage.getItem(MODE_STORE) || 'write'; } catch (err) {}
+let sawPenButton = false;
+
+function setPenMode(mode) {
+  PEN_MODE = mode;
+  try { localStorage.setItem(MODE_STORE, mode); } catch (err) {}
+  for (const b of document.querySelectorAll('.pad-mode .pm')) {
+    b.classList.toggle('on', b.dataset.mode === mode);
+  }
+  padCanvas.classList.toggle('erasing', mode === 'erase');
+}
+
+// A pen's side button is not something to rely on: what it reports differs
+// from device to device and some report nothing at all, which is why the pad
+// carries two buttons of its own. Where it does report something, it is
+// honoured, and the first time it is seen it says what it sent, so an
+// unrecognised pen can be made to work rather than shrugged at.
+function penButtonDown(e) {
+  if (e.pointerType !== 'pen' && e.pointerType !== 'eraser') return false;
+  // What a stylus sends for plain contact is not agreed on: some report 1,
+  // some report 2, and treating anything but 1 as the button turns every
+  // stroke on such a pen into an erase. So the pen is asked rather than
+  // assumed: the first values it sends while writing are its idea of "no
+  // button", and only something other than that counts as one.
+  if (e.buttons && !penBaseline.size && penBaseline.calibrating) return false;
+  const down = e.pointerType === 'eraser'
+    || (e.buttons !== 0 && !penBaseline.has(e.buttons));
+  if (down && !sawPenButton) {
+    sawPenButton = true;
+    toast('Pen button seen: ' + e.pointerType + ', buttons ' + e.buttons
+          + '. Rubbing out.', 4000);
+  }
+  return down;
+}
+
+// erasing happens because the mode says so, or because the button is held
+function isEraser(e) {
+  return PEN_MODE === 'erase' || penButtonDown(e);
+}
+
+// strokes within reach of the tip, gone. Whole strokes rather than parts of
+// them: a half-erased letter is worse than a missing one.
+function rubOut(strokes, x, y, reach) {
+  const keep = strokes.filter(st => !(st || []).some(
+    p => Math.abs(p[0] - x) < reach && Math.abs(p[1] - y) < reach));
+  return [keep, keep.length !== strokes.length];
+}
+
+// The pen is "in play" whenever it is seen at all, hovering included: the S Pen
+// reports hover, and that is the moment the hand is coming down. While it is
+// in play the page surface belongs to the pen; the rest of the time it belongs
+// to the browser, which is what gives scrolling its momentum back.
+let penNearTimer = null;
+
+// Quiet unless there is something worth seeing: the resting state of a pen is
+// not news, a button that has never been pressed is.
+function showPenState(e) {
+  const el = document.getElementById('pad-pen');
+  if (!el) return;
+  const odd = e.pointerType === 'eraser'
+    || (e.buttons !== 0 && penBaseline.size && !penBaseline.has(e.buttons));
+  el.textContent = odd ? (e.pointerType + ' b' + e.buttons) : '';
+  el.classList.toggle('hot', odd);
+}
+
+function penSeen(e) {
+  lastPenAt = Date.now();
+  if (e) { learnPen(e); showPenState(e); }
+  document.body.classList.add('pen-near');
+  clearTimeout(penNearTimer);
+  penNearTimer = setTimeout(() => {
+    if (Date.now() - lastPenAt >= PEN_GRACE - 50) {
+      document.body.classList.remove('pen-near');
+    }
+  }, PEN_GRACE);
+}
+
+for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'pointerover']) {
+  document.addEventListener(ev, (e) => {
+    if (e.pointerType === 'pen' || e.pointerType === 'eraser') penSeen(e);
+  }, true);
+}
+
+// the browser took the gesture for itself: no stroke, and no press either
+function penCancel() {
+  pan = null;
+  stroke = null;
+}
+
+function penUp(e) {
+  // a finger that pressed without travelling was pointing at something: take
+  // that as what the ink is about, and leave the ink itself alone
+  if (pan && e && e.pointerType === 'touch') {
+    const still = pan.moved < TAP_SLOP && Date.now() - pan.at < 1200;
+    // picking is a double tap now, handled once for both tools
+    pan = null;
+    return;
+  }
+  pan = null;
+  if (!stroke) return;
+  stroke = null;
+  showInkButtons(true);
+  drawAll();
+}
+
+function inkBounds() {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const s of PENDING) for (const p of s) {
+    x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]);
+    x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]);
+  }
+  return [x0, y0, x1, y1];
+}
+
+function clearInk() {
+  PENDING = []; strokePage = null; stroke = null;
+  INK_EDIT = null;
+  INK_UNDO = [];
+  showInkButtons(false);
+  document.getElementById('ink-save').textContent = 'Keep the ink as a note';
+  drawAll();
+}
+
+// Whether a note can still be changed: it is ours, and in the round that is
+// open. One already sent is somebody's copy of what was said, and stays so.
+function changeable(note) {
+  return !!(note && note.id && !note.claude
+            && (META.open || []).some(n => n.id === note.id));
+}
+
+// The note's own strokes, handed back to the pad to be added to or rubbed out.
+// Moved to the pad's corner and the pad made big enough for them: they were
+// written in a pad that may have been any size, and where in it they sat is
+// not kept by anything downstream, which reads them from their own origin.
+function rewriteHand(note) {
+  if (!pad.hidden && !padGuard()) return;
+  const hand = (note.hand || []).map(st => st.map(p => [p[0], p[1]]));
+  closeSheet();
+  SEL = {page: note.page, kind: 'note', text: note.anchor || '',
+         rects: note.rects && note.rects.length ? note.rects : [note.rect]};
+  openPad();
+  PAD_EDIT = note;
+  PAD_TAG = note.tag || 'AUTO';
+  document.getElementById('pad-tag').value = PAD_TAG;
+  document.getElementById('pad-about').textContent =
+    (hand.length ? 'changing ' : 'writing on ') + note.id
+    + (note.anchor ? ', about: ' + note.anchor : '');
+  const pts = hand.flat();
+  if (pts.length) {
+    const edge = 12;
+    const x0 = Math.min(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1]));
+    const w = Math.max(...pts.map(p => p[0])) - x0, h = Math.max(...pts.map(p => p[1])) - y0;
+    HAND = hand.map(st => st.map(p => [p[0] - x0 + edge, p[1] - y0 + edge]));
+    const around = pad.offsetWidth - padCanvas.getBoundingClientRect().width;
+    pad.style.width = Math.min(window.innerWidth - 16,
+                               Math.max(pad.offsetWidth, w + 2 * edge + around)) + 'px';
+    padCanvas.style.height = Math.max(padCanvas.getBoundingClientRect().height,
+                                      h + 3 * edge) + 'px';
+  }
+  PAD_WAS = JSON.stringify(HAND);
+  placePad();
+  drawPad();
+  drawAll();
+}
+
+// The note's ink, on the page, live again: the pen adds to it and its button,
+// or Rub out, takes strokes away. Keeping it goes back through the note's own
+// panel, so the words and the handwriting travel with it unchanged.
+function reinkNote(note) {
+  if (PENDING.length && !INK_EDIT) {
+    toast('Keep or clear the ink already on the page first');
+    return;
+  }
+  closeSheet();
+  INK_EDIT = note;
+  PENDING = (note.ink || []).map(st => st.map(p => [p[0], p[1]]));
+  strokePage = note.page;
+  INK_UNDO = [];                  // undo goes back as far as the note, no further
+  setTool('pen');
+  document.getElementById('ink-save').textContent = 'Keep the changed ink';
+  showInkButtons(true);
+  drawAll();
+  bringIntoView(note);
+  toast('The ink of ' + note.id + ' is live: write to add, rub out to take away', 4000);
+}
+
+// --- the note sheet -------------------------------------------------------
+function openNote(note) {
+  EDIT = Object.assign({}, note);
+  document.getElementById('sheet-title').textContent =
+    note.claude ? "Claude's note" : (note.id ? 'Note ' + note.id : 'New note');
+  const where = note.source && note.source.file
+    ? note.source.file + ':' + note.source.line : 'page ' + note.page;
+  document.getElementById('sheet-where').textContent = where;
+  document.getElementById('sheet-quote').textContent = note.anchor || '';
+  document.getElementById('sheet-quote').hidden = !note.anchor;
+  // a selection can be widened to the sentences either side of it, which is
+  // how a note ends up being about two of them rather than one
+  const grow = document.getElementById('sheet-grow');
+  grow.hidden = !(SEL && !note.claude && !note.id);
+  if (!grow.hidden) showSelectionState();
+  const inkMark = document.getElementById('sheet-ink');
+  inkMark.hidden = !(note.ink && note.ink.length);
+  inkMark.textContent = (note.ink && note.ink.length && note.anchor)
+    ? 'ink, about this' : 'with ink';
+  const text = document.getElementById('sheet-text');
+  text.value = note.note || '';
+  text.disabled = !!note.claude;
+  for (const b of document.querySelectorAll('#sheet-tags .tag')) {
+    b.classList.toggle('on', b.dataset.tag === (note.tag || 'AUTO'));
+  }
+  document.getElementById('sheet-save').hidden = !!note.claude;
+  document.getElementById('sheet-del').hidden = !!note.claude || !note.id
+    || (META.past || []).some(p => p.id === note.id);
+  // A note already taken can be gone back into: its handwriting in the pad,
+  // its ink on the page. A typed note can be written on the same way.
+  const redo = document.getElementById('sheet-redo');
+  const hasHand = !!(note.hand && note.hand.length), hasInk = !!(note.ink && note.ink.length);
+  const canChange = changeable(note);
+  redo.hidden = !note.id || note.claude || !(canChange || hasHand || hasInk);
+  const rewrite = document.getElementById('sheet-rewrite');
+  rewrite.hidden = !canChange;
+  rewrite.textContent = hasHand ? 'Change the handwriting' : 'Write on it';
+  document.getElementById('sheet-reink').hidden = !(canChange && hasInk);
+  document.getElementById('sheet-redo-said').textContent = canChange ? ''
+    : 'Sent with an earlier round: its handwriting and ink stay as they were sent.';
+  document.getElementById('sheet').hidden = false;
+  showFixes(note);
+  // The panel comes up from the bottom and its Save is at the foot of it,
+  // which after Keep the ink as a note is the far end of the screen from the
+  // hand that pressed it. So the same Save is also put just under the bar.
+  document.getElementById('quick-save').hidden = !!note.claude
+    || !!(note.id && !changeable(note));
+  placeQuickSave();
+  showNav(note);
+  showHand(note);
+  if (!note.claude && !(note.hand && note.hand.length)) {
+    setTimeout(() => text.focus(), 60);
+  }
+}
+
+// what the note is about, said in the sheet before it is saved, so a note
+// that caught the wrong thing is visible as such
+function showSelectionState() {
+  const sentenceSel = SEL && SEL.kind === 'sentence';
+  for (const b of document.querySelectorAll('.grow-sel button[data-grow]')) {
+    b.hidden = !sentenceSel;
+  }
+  const widen = document.getElementById('sheet-widen');
+  widen.hidden = !(SEL && SEL.kind === 'word' && SEL.sentence >= 0);
+  const label = document.getElementById('sheet-seln');
+  if (!SEL) { label.textContent = ''; return; }
+  if (SEL.kind === 'word') label.textContent = 'the word "' + SEL.text + '"';
+  else if (SEL.kind === 'figure') label.textContent = SEL.label;
+  else {
+    const n = Math.abs(SEL.to - SEL.from) + 1;
+    label.textContent = n === 1 ? 'one sentence' : n + ' sentences';
+  }
+}
+
+function refreshQuote() {
+  const text = selectionText();
+  document.getElementById('sheet-quote').textContent = text;
+  document.getElementById('sheet-quote').hidden = !text;
+  if (EDIT) {
+    EDIT.rects = selectionRects();
+    EDIT.anchor = text;
+    EDIT.kind = SEL ? SEL.kind : 'region';
+  }
+  showSelectionState();
+}
+
+// A note's own handwriting, drawn back into the panel so you can see what you
+// wrote. Scaled to fit, since the pad it was written in may have been any size.
+function showHand(note) {
+  const cv = document.getElementById('sheet-hand');
+  const hand = note.hand || [];
+  cv.hidden = !hand.length;
+  if (!hand.length) return;
+  const box = cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.max(1, Math.round(box.width * dpr));
+  cv.height = Math.max(1, Math.round(box.height * dpr));
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, box.width, box.height);
+  const pts = hand.flat();
+  if (!pts.length) return;
+  const x0 = Math.min(...pts.map(p => p[0])), x1 = Math.max(...pts.map(p => p[0]));
+  const y0 = Math.min(...pts.map(p => p[1])), y1 = Math.max(...pts.map(p => p[1]));
+  const pad = 8;
+  const k = Math.min((box.width - 2 * pad) / Math.max(x1 - x0, 1),
+                     (box.height - 2 * pad) / Math.max(y1 - y0, 1), 1.4);
+  g.strokeStyle = 'rgba(217,48,37,.95)';
+  g.lineWidth = 2; g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const st of hand) {
+    g.beginPath();
+    st.forEach((p, i) => {
+      const x = pad + (p[0] - x0) * k, y = pad + (p[1] - y0) * k;
+      if (i) g.lineTo(x, y); else g.moveTo(x, y);
+    });
+    g.stroke();
+  }
+}
+
+// the same question the pad asks, for the window below it
+function sheetGuard() {
+  const text = document.getElementById('sheet-text');
+  const typed = text && !text.disabled && text.value.trim();
+  const unsaved = EDIT && typed && typed !== (EDIT.note || '').trim();
+  if (unsaved && !confirm('This note is not saved. OK closes it anyway, '
+                          + 'Cancel goes back to it.')) {
+    return false;
+  }
+  closeSheet();
+  return true;
+}
+
+// The notes on show, in the order they sit on the pages: what the arrows in
+// the panel step through, so two notes on one sentence are both reachable.
+function notesInOrder() {
+  return allNotes().slice().sort((a, b) =>
+    (a.page - b.page) || ((a.rect && a.rect[1]) || 0) - ((b.rect && b.rect[1]) || 0));
+}
+
+function showNav(note) {
+  const nav = document.getElementById('sheet-nav');
+  const list = notesInOrder();
+  const at = list.findIndex(n => n.id === note.id);
+  nav.hidden = !(note.id && list.length > 1);
+  if (nav.hidden) return;
+  document.getElementById('sheet-count').textContent = (at + 1) + ' of ' + list.length;
+  document.getElementById('sheet-prev').disabled = at <= 0;
+  document.getElementById('sheet-next').disabled = at < 0 || at >= list.length - 1;
+}
+
+function stepNote(by) {
+  const list = notesInOrder();
+  const at = list.findIndex(n => EDIT && n.id === EDIT.id);
+  const next = list[at + by];
+  if (!next) return;
+  openNote(next);
+  bringIntoView(next);
+}
+
+// put the note's own place on screen, so stepping actually goes somewhere
+function bringIntoView(note) {
+  const el = document.querySelector('.page[data-page="' + note.page + '"]');
+  if (!el || !note.rect) return;
+  const host = document.getElementById('pages');
+  const box = el.getBoundingClientRect();
+  const k = box.width / META.build.sizes[note.page - 1][0];
+  const y = box.top - host.getBoundingClientRect().top + host.scrollTop + note.rect[1] * k;
+  host.scrollTo({top: Math.max(0, y - host.clientHeight / 3), behavior: 'smooth'});
+}
+
+// under the button that was pressed when it is on show, the ink's Keep;
+// otherwise under the right-hand end of the bar
+function placeQuickSave() {
+  const quick = document.getElementById('quick-save');
+  if (quick.hidden) return;
+  const bar = document.querySelector('.tools').getBoundingClientRect();
+  const keep = document.getElementById('ink-save');
+  const under = keep.hidden ? null : keep.getBoundingClientRect();
+  const w = quick.offsetWidth || 90;
+  const left = under ? under.left + (under.width - w) / 2 : bar.right - w - 12;
+  quick.style.top = (bar.bottom + 8) + 'px';
+  quick.style.left = Math.max(8, Math.min(left, window.innerWidth - w - 8)) + 'px';
+}
+
+// --- a note's proposed fixes --------------------------------------------
+// Whoever answered a delivered round may have proposed fixes for its notes:
+// exact text in the source and what replaces it. They are offered here, in the
+// note, where it is being read, and one tap puts one in. The same fixes, all
+// of them at once, are at /paper/<id>/feedback.
+function answersOf(note) {
+  const all = (META && META.feedback) || {};
+  return (note && note.id && all[note.id]) || {fixes: [], thread: []};
+}
+
+function waitingFixes(note) {
+  if (!note || note.claude || note.status === 'done' || note.status === 'rejected') return [];
+  return answersOf(note).fixes.filter(f => f.state === 'proposed');
+}
+
+function fxMake(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+// word by word, each stretch of change shown whole: what goes, then what comes
+function fxDiff(old, neu) {
+  const split = t => t.split(/(\s+)/).filter(x => x.length);
+  const a = split(old), b = split(neu), box = fxMake('div', 'fx-diff');
+  if (a.length * b.length > 250000) {
+    box.append(fxMake('del', '', old), document.createTextNode(' '), fxMake('ins', '', neu));
+    return box;
+  }
+  const n = a.length, m = b.length;
+  const L = Array.from({length: n + 1}, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
+    L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  }
+  const parts = [];
+  const add = (key, t) => {
+    const last = parts[parts.length - 1];
+    if (key === 'same') { if (last && 'same' in last) last.same += t; else parts.push({same: t}); }
+    else if (last && !('same' in last)) last[key] += t;
+    else parts.push(key === 'del' ? {del: t, ins: ''} : {del: '', ins: t});
+  };
+  let i = 0, j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) { add('same', a[i]); i++; j++; }
+    else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) { add('ins', b[j]); j++; }
+    else { add('del', a[i]); i++; }
+  }
+  const slight = t => !t.trim() || (t.trim().split(/\s+/).length === 1 && t.trim().length <= 3);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let k = 1; k + 1 < parts.length; k++) {
+      const p = parts[k - 1], q = parts[k], r = parts[k + 1];
+      if ('same' in q && !('same' in p) && !('same' in r) && slight(q.same)) {
+        parts.splice(k - 1, 3, {del: p.del + q.same + r.del, ins: p.ins + q.same + r.ins});
+        changed = true;
+        break;
+      }
+    }
+  }
+  for (const part of parts) {
+    if ('same' in part) { box.append(document.createTextNode(part.same)); continue; }
+    const edge = part.del || part.ins;
+    const lead = edge.match(/^\s*/)[0], trail = edge.match(/\s*$/)[0];
+    const gone = part.del.trim(), come = part.ins.trim();
+    if (lead) box.append(document.createTextNode(lead));
+    if (gone) box.append(fxMake('del', '', gone));
+    if (gone && come) box.append(document.createTextNode(' '));
+    if (come) box.append(fxMake('ins', '', come));
+    if (trail) box.append(document.createTextNode(trail));
+  }
+  return box;
+}
+
+function showFixes(note) {
+  const box = document.getElementById('sheet-fixes');
+  box.innerHTML = '';
+  const said = answersOf(note);
+  const open = !(note.status === 'done' || note.status === 'rejected');
+  // a note of the agent's own is there to be decided, with a fix or without
+  const proposal = isAgent(note.by);
+  box.hidden = !(said.fixes.length || said.thread.length || (proposal && open));
+  if (box.hidden) return;
+  const waiting = said.fixes.filter(f => f.state === 'proposed').length;
+  box.append(fxMake('div', 'fx-head', proposal && open
+    ? (waiting ? note.by + ' proposes this: approve or reject' : note.by + ' remarks this, with no fix')
+    : waiting && open
+    ? (waiting === 1 ? 'A fix is proposed' : waiting + ' fixes are proposed: choose one')
+    : 'What came back'));
+  for (const fix of said.fixes) {
+    const card = fxMake('div', 'fx-card ' + fix.state);
+    const top = fxMake('div', 'fx-top');
+    const what = fxMake('div', 'fx-what', fix.summary);
+    what.append(fxMake('span', 'fx-by', fix.by));
+    top.append(what);
+    if (fix.state === 'proposed' && open) {
+      const use = fxMake('button', 'fx-use', proposal ? 'Approve' : 'Use this');
+      use.type = 'button';
+      use.onclick = () => useFix(note, fix, use);
+      top.append(use);
+    } else if (fix.state === 'applied') {
+      top.append(fxMake('span', 'fx-badge', 'applied'));
+      const back = fxMake('button', 'fx-undo', 'Undo');
+      back.type = 'button';
+      back.title = 'take this fix back out of the source; the note opens again';
+      back.onclick = () => undoFix(note, fix, back);
+      top.append(back);
+    } else if (fix.state === 'failed') {
+      top.append(fxMake('span', 'fx-badge failed', 'did not apply'));
+    } else if (fix.state === 'rejected') {
+      top.append(fxMake('span', 'fx-badge rejected', 'rejected'));
+    }
+    card.append(top);
+    if (fix.why) card.append(fxMake('div', 'fx-why', fix.why));
+    for (const e of fix.edits || []) {
+      card.append(fxMake('div', 'fx-file', e.file), fxDiff(e.old, e.new));
+    }
+    if (fix.problem) card.append(fxMake('div', 'fx-problem', fix.problem));
+    box.append(card);
+  }
+  for (const m of said.thread) {
+    const msg = fxMake('div', 'fx-msg' + (m.by === 'you' ? ' you' : ''));
+    msg.append(fxMake('span', 'fx-who', m.by), document.createTextNode(m.text));
+    box.append(msg);
+  }
+  if (open) {
+    const row = fxMake('div', 'fx-reply');
+    const input = fxMake('input');
+    input.placeholder = proposal ? 'Why not, if you reject it (optional)'
+      : 'Reply: a further note, or which way to go';
+    const send = fxMake('button', '', 'Reply');
+    send.type = 'button';
+    send.onclick = () => replyTo(note, input, send);
+    row.append(input);
+    if (proposal) {
+      const no = fxMake('button', 'fx-reject', 'Reject');
+      no.type = 'button';
+      no.title = 'close it as rejected; what is typed beside it is kept as the reason';
+      no.onclick = () => rejectProposal(note, input, no);
+      row.append(no);
+    } else {
+      row.append(send);
+    }
+    box.append(row);
+  }
+}
+
+function rejectProposal(note, input, button) {
+  button.disabled = true;
+  postJSON('/paper/' + PID + '/proposals/decide',
+           {notes: [note.id], what: 'reject', why: input.value})
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'unknown error');
+      const failed = Object.values(data.failed || {});
+      if (failed.length) throw new Error(failed[0]);
+      return load().then(() => {
+        const next = nextWithFixes(note);
+        if (next) { openNote(next); toast('Rejected. The next one:'); }
+        else { closeSheet(); toast('Rejected.'); }
+      });
+    })
+    .catch(err => { toast('Not rejected: ' + err.message, 6000); button.disabled = false; });
+}
+
+function useFix(note, fix, button) {
+  button.disabled = true;
+  postJSON('/paper/' + PID + '/feedback/apply', {note: note.id, fixes: [fix.id]})
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'unknown error');
+      const failed = Object.values(data.failed || {});
+      if (failed.length) throw new Error(failed[0]);
+      const files = [...new Set((fix.edits || []).map(e => e.file))].join(', ');
+      // straight on to the next note with a fix to choose, in the order they
+      // sit on the pages, so a round of proposals is worked through without
+      // hunting for the next ring on the page
+      return load().then(() => {
+        const next = nextWithFixes(note);
+        if (next) {
+          openNote(next);
+          bringIntoView(next);
+          toast('Put into ' + files + '. Next: ' + (next.source && next.source.file
+            ? next.source.file + ':' + next.source.line : 'page ' + next.page), 3500);
+        } else {
+          closeSheet();
+          toast('Put into ' + files + '. That was the last fix to choose. '
+                + 'Rebuild to read the paper as it is now.', 6000);
+        }
+      });
+    })
+    .catch(err => { toast('Not applied: ' + err.message, 6000); button.disabled = false; load(); });
+}
+
+// the first note after this one, by page and position, with a fix waiting;
+// from the top again if there is none further down
+function nextWithFixes(after) {
+  const list = notesInOrder().filter(n => n.id !== after.id && waitingFixes(n).length);
+  const key = n => [n.page, (n.rect && n.rect[1]) || 0];
+  const [p0, y0] = key(after);
+  return list.find(n => { const [p, y] = key(n); return p > p0 || (p === p0 && y > y0); })
+    || list[0] || null;
+}
+
+function replyTo(note, input, button) {
+  if (!input.value.trim()) { input.focus(); return; }
+  button.disabled = true;
+  postJSON('/paper/' + PID + '/feedback/reply', {note: note.id, text: input.value})
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'unknown error');
+      toast('Said. The note stays open for whoever answers next.');
+      return load().then(() => {
+        const again = allNotes().find(n => n.id === note.id);
+        if (again && EDIT && EDIT.id === note.id) showFixes(again);
+      });
+    })
+    .catch(err => toast('Not sent: ' + err.message, 6000))
+    .finally(() => { button.disabled = false; });
+}
+
+function undoFix(note, fix, button) {
+  button.disabled = true;
+  postJSON('/paper/' + PID + '/feedback/undo', {note: note.id, fix: fix.id})
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'unknown error');
+      toast('Taken back out; the note is open again.');
+      return load().then(() => {
+        const again = allNotes().find(n => n.id === note.id);
+        if (again) openNote(again);
+      });
+    })
+    .catch(err => { toast('Not undone: ' + err.message, 6000); button.disabled = false; });
+}
+
+// --- the agent, and what is waiting to be committed -------------------------
+// What the agent is doing with the round, said in the header while it does it,
+// and the review's commit one tap away: on the branch you are on, or on one
+// of its own, to be taken or dropped.
+let agentPoll = null;
+
+function showAgentAndCommit() {
+  const said = document.getElementById('agent-said');
+  const ask = document.getElementById('ask-agent');
+  const a = (META && META.agent) || {};
+  const r = (META && META.review) || {};
+  said.hidden = !a.state;
+  said.className = 'agent-said ' + (a.state || '');
+  const reviewing = a.mode === 'review';
+  const who = a.runner || runnerName();
+  if (reviewing && a.state === 'running') {
+    said.textContent = who + ' is reviewing the paper…';
+  } else if (reviewing && a.state === 'failed') {
+    said.textContent = who + ' could not review: ' + (a.said || 'see its log');
+  } else if (reviewing && a.state === 'done') {
+    said.textContent = who + ' proposed ' + (a.notes || 0) + ' note' + (a.notes === 1 ? '' : 's');
+  } else if (a.state === 'running') {
+    said.textContent = who + ' is answering the round of ' + a.round + '…';
+  } else if (a.state === 'failed') {
+    said.textContent = who + ' could not answer: ' + (a.said || 'see its log');
+  } else if (a.state === 'done') {
+    said.textContent = who + ' answered the round of ' + a.round
+      + (a.branch ? ', on ' + a.branch : '');
+  } else if (a.state === 'stopped') {
+    said.textContent = who + ' was stopped';
+  }
+  // someone to ask, and something to ask about: a sent note nobody has answered
+  const answers = (META && META.feedback) || {};
+  const unanswered = ((META && META.past) || []).some(n => !answered(n) && !answers[n.id]
+                                                         && !isAgent(n.by));
+  ask.hidden = !(a.mode && a.mode !== 'off' && a.mode !== 'review' && a.state !== 'running'
+                 && unanswered);
+  // a review needs a source to fix, and only one agent at a time
+  const review = document.getElementById('ask-review');
+  review.hidden = !META || /\.pdf$/i.test(META.main || '') || a.state === 'running';
+  if (review.hidden) document.getElementById('review-focus').hidden = true;
+  ask.textContent = 'Ask ' + runnerName() + (a.state && a.state !== 'running' ? ' again' : '');
+
+  const n = r.to_commit || 0;
+  document.getElementById('commit').hidden = !n || r.review_branch;
+  document.getElementById('commit').textContent = 'Commit (' + n + ' note' + (n === 1 ? '' : 's') + ')';
+  document.getElementById('commit-branch').hidden = !n || r.review_branch;
+  document.getElementById('take').hidden = !r.review_branch;
+  document.getElementById('drop').hidden = !r.review_branch;
+  if (r.review_branch) {
+    document.getElementById('take').textContent = 'Take ' + r.branch;
+    if (n) {
+      document.getElementById('commit').hidden = false;    // more fixes on the branch
+    }
+  }
+  clearTimeout(agentPoll);
+  if (a.state === 'running') agentPoll = setTimeout(load, 10000);
+}
+
+function headerCall(url, body, done, button) {
+  button.disabled = true;
+  postJSON(url, body)
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'unknown error');
+      toast(done(data), 6000);
+      return load();
+    })
+    .catch(err => toast(err.message, 6000))
+    .finally(() => { button.disabled = false; });
+}
+
+function closeSheet() {
+  document.getElementById('quick-save').hidden = true;
+  document.getElementById('sheet').hidden = true;
+  EDIT = null;
+  SEL = null;
+  drawAll();
+}
+
+// widen or narrow the selection by a sentence, keeping the note on it
+function growSelection(by) {
+  if (!SEL || SEL.kind !== 'sentence') return;
+  const list = layoutOf(SEL.page).sentences;
+  const next = SEL.to + by;
+  if (next < Math.min(SEL.from, 0) || next >= list.length) return;
+  if (next < SEL.from && by < 0 && SEL.to === SEL.from) return;  // never inside out
+  SEL.to = Math.max(SEL.from, Math.min(next, list.length - 1));
+  drawAll();
+  refreshQuote();
+}
+
+// a word note that turns out to be about the whole sentence after all
+function widenToSentence() {
+  if (!SEL || SEL.kind !== 'word' || SEL.sentence < 0) return;
+  SEL = {page: SEL.page, kind: 'sentence', from: SEL.sentence, to: SEL.sentence};
+  drawAll();
+  refreshQuote();
+}
+
+function saveNote() {
+  if (!EDIT) return;
+  const tagEl = document.querySelector('#sheet-tags .tag.on');
+  const body = {
+    page: EDIT.page,
+    rect: EDIT.rect || [0, 0, 0, 0],
+    rects: EDIT.rects || [],
+    kind: EDIT.kind || 'region',
+    tag: tagEl ? tagEl.dataset.tag : 'AUTO',
+    note: document.getElementById('sheet-text').value.trim(),
+    ink: EDIT.ink || [],
+    // Sent back as they are. A save is a replacement, and a note saved from
+    // this panel without them lost its handwriting to a change of tag.
+    hand: EDIT.hand || [],
+    pad: EDIT.pad || [],
+  };
+  if (EDIT.id) body.id = EDIT.id;
+  if (!body.note && !body.ink.length && !body.hand.length) {
+    toast('Write something, or keep some ink'); return;
+  }
+  document.getElementById('sheet-save').disabled = true;
+  document.getElementById('quick-save').disabled = true;
+  postJSON('/paper/' + PID + '/note', body)
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'unknown error');
+      closeSheet(); clearInk(); load();
+      toast('Saved to ' + (data.note.source && data.note.source.file
+        ? data.note.source.file + ':' + data.note.source.line : 'page ' + data.note.page));
+    })
+    .catch(err => toast('Not saved: ' + err.message, 5000))
+    .finally(() => {
+      document.getElementById('sheet-save').disabled = false;
+      document.getElementById('quick-save').disabled = false;
+    });
+}
+
+// --- the writing pad --------------------------------------------------
+// Writing on top of the sentence you are writing about is no good: the words
+// disappear under the ink. So the pen writes in a pad put beside whatever was
+// picked, joined to it by a leader, and dragged out of the way when the paper
+// underneath matters more. Its strokes are kept in the pad's own coordinates,
+// never the page's, so the handwriting reads back at the size it was written.
+const pad = document.getElementById('pad');
+const padCanvas = document.getElementById('pad-canvas');
+let HAND = [];          // strokes in pad coordinates
+let padStroke = null;
+let PAD_TAG = 'AUTO';
+let padTarget = null;   // the selection the pad is writing about
+let PAD_EDIT = null;    // the note whose handwriting the pad holds, if it is one
+let PAD_WAS = '';       // what that handwriting was, to tell a change from none
+let PAD_UNDO = [];      // HAND before each stroke, rub-out and clear
+let padRubbed = false;  // whether the rub-out under way has taken anything
+
+function padSize() {
+  const box = padCanvas.getBoundingClientRect();
+  return [Math.round(box.width), Math.round(box.height)];
+}
+
+function drawPad() {
+  const box = padCanvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  if (padCanvas.width !== Math.round(box.width * dpr)) {
+    padCanvas.width = Math.round(box.width * dpr);
+    padCanvas.height = Math.round(box.height * dpr);
+  }
+  const g = padCanvas.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, box.width, box.height);
+  g.strokeStyle = 'rgba(217,48,37,.95)';
+  g.lineWidth = 2.2; g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const st of HAND) {
+    const pts = (st || []).filter(p => p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    if (!pts.length) continue;
+    g.beginPath();
+    pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]));
+    g.stroke();
+  }
+  pad.classList.toggle('empty', !HAND.length);
+}
+
+// Put the pad where it does not cover what it is about: under the selection
+// if there is room on screen, over it if not, and never across it.
+function placePad() {
+  const rects = selectionRects();
+  const page = document.querySelector('.page[data-page="' + (padTarget && padTarget.page) + '"]');
+  if (!page || !rects.length) return;
+  const host = document.getElementById('pages');
+  const box = page.getBoundingClientRect();
+  const k = box.width / META.build.sizes[padTarget.page - 1][0];
+  const top = Math.min(...rects.map(r => r[1])) * k + box.top;
+  const bottom = Math.max(...rects.map(r => r[3])) * k + box.top;
+  const left = Math.min(...rects.map(r => r[0])) * k + box.left;
+  const gap = 14;
+  const ceiling = host.getBoundingClientRect().top + 4;
+  const floor = window.innerHeight - 8;
+  // the writing area gives way before the buttons do: a pad whose Keep is off
+  // the bottom of the screen cannot be used at all
+  const chrome = pad.offsetHeight - padCanvas.getBoundingClientRect().height;
+  const roomBelow = floor - (bottom + gap), roomAbove = (top - gap) - ceiling;
+  const best = Math.max(roomBelow, roomAbove);
+  let canvasH = Math.max(90, Math.min(padCanvas.getBoundingClientRect().height,
+                                      best - chrome));
+  padCanvas.style.height = canvasH + 'px';
+  const h = canvasH + chrome, w = pad.offsetWidth || 380;
+  let y = (roomBelow >= h) ? bottom + gap
+        : (roomAbove >= h) ? top - gap - h
+        : Math.max(ceiling, floor - h);
+  const x = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+  pad.style.left = (x + window.scrollX) + 'px';
+  pad.style.top = (Math.max(ceiling, Math.min(y, floor - h)) + window.scrollY) + 'px';
+}
+
+function openPad() {
+  if (!SEL) return;
+  padTarget = SEL;
+  HAND = [];
+  PAD_UNDO = [];
+  PAD_TAG = 'AUTO';
+  document.getElementById('pad-tag').value = PAD_TAG;
+  const what = SEL.kind === 'figure' ? SEL.label
+    : SEL.kind === 'word' ? 'the word "' + SEL.text + '"'
+    : selectionText();
+  document.getElementById('pad-about').textContent = 'about: ' + what;
+  document.getElementById('pad-about').title = what;
+  pad.hidden = false;
+  setPenMode(PEN_MODE);
+  placePad();
+  drawPad();
+  drawAll();
+}
+
+function closePad() {
+  pad.hidden = true;
+  padTarget = null;
+  PAD_EDIT = null;
+  PAD_WAS = '';
+  PAD_UNDO = [];
+  HAND = [];
+  drawAll();
+}
+
+let padErasing = false;
+const MIN_STEP = 1.1;   // px between kept points
+
+// A pen reports at the screen's rate, which for a page of handwriting is tens
+// of thousands of points, most of them a fraction of a pixel apart. Dropping
+// those changes nothing anyone can see and keeps a note a sane size to store
+// and to send.
+function addPoint(stroke, x, y) {
+  const last = stroke[stroke.length - 1];
+  if (last && Math.abs(x - last[0]) < MIN_STEP && Math.abs(y - last[1]) < MIN_STEP) {
+    return false;
+  }
+  stroke.push([Math.round(x * 10) / 10, Math.round(y * 10) / 10]);
+  return true;
+}
+
+padCanvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'touch') return;   // a finger is for moving, not writing
+  e.preventDefault();
+  const box = padCanvas.getBoundingClientRect();
+  if (!box.width || !Number.isFinite(e.clientX)) return;
+  // capture last, and never let it stop the stroke: it throws on a pointer id
+  // the browser no longer considers active, and losing the whole gesture to
+  // that is worse than losing the capture
+  const grab = () => {
+    try { padCanvas.setPointerCapture(e.pointerId); } catch (err) {}
+  };
+  penContacts += 1;
+  if (isEraser(e)) {
+    // One rub-out is one step to undo, however much it takes on the way:
+    // remembered as it starts, and forgotten again if it took nothing. A pen
+    // can report a move with its button down just before the down itself, and
+    // that move has already started this one.
+    if (!padErasing) {
+      remember(PAD_UNDO, HAND);
+      padRubbed = false;
+    }
+    padErasing = true;
+    padStroke = null;
+    const [kept, changed] = rubOut(HAND, e.clientX - box.left, e.clientY - box.top, ERASER_R);
+    HAND = kept;
+    padRubbed = padRubbed || changed;
+    drawPad();
+    grab();
+    return;
+  }
+  padErasing = false;
+  remember(PAD_UNDO, HAND);
+  padStroke = [[e.clientX - box.left, e.clientY - box.top]];
+  HAND.push(padStroke);
+  drawPad();
+  grab();
+});
+padCanvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'touch') return;
+  const box = padCanvas.getBoundingClientRect();
+  if (padErasing || (isEraser(e) && e.buttons)) {
+    e.preventDefault();
+    if (!padErasing) {              // the button pressed in the middle of a stroke
+      padErasing = true;
+      padStroke = null;
+      padRubbed = false;
+      remember(PAD_UNDO, HAND);
+    }
+    const [kept, changed] = rubOut(HAND, e.clientX - box.left, e.clientY - box.top, ERASER_R);
+    if (changed) { HAND = kept; padRubbed = true; drawPad(); }
+    return;
+  }
+  if (!padStroke) return;
+  e.preventDefault();
+  if (addPoint(padStroke, e.clientX - box.left, e.clientY - box.top)) drawPad();
+});
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+  padCanvas.addEventListener(ev, () => {
+    if (padErasing && !padRubbed) PAD_UNDO.pop();    // it rubbed out nothing
+    padStroke = null; padErasing = false; padRubbed = false;
+  });
+}
+
+// resized from the corner, both wider and taller: a long note needs room and
+// a short one should not cover the page
+{
+  const grip = document.getElementById('pad-resize');
+  let from = null;
+  grip.addEventListener('pointerdown', (e) => {
+    from = {x: e.clientX, y: e.clientY,
+            w: pad.offsetWidth, h: padCanvas.getBoundingClientRect().height};
+    grip.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  grip.addEventListener('pointermove', (e) => {
+    if (!from) return;
+    pad.style.width = Math.max(240, from.w + e.clientX - from.x) + 'px';
+    padCanvas.style.height = Math.max(110, from.h + e.clientY - from.y) + 'px';
+    drawPad();
+    drawAll();
+  });
+  for (const ev of ['pointerup', 'pointercancel']) {
+    grip.addEventListener(ev, () => { from = null; });
+  }
+}
+
+// dragged by its head, the way the board's file window is
+{
+  const head = document.getElementById('pad-head');
+  let from = null;
+  head.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.pad-x')) return;
+    from = {x: e.clientX, y: e.clientY, left: pad.offsetLeft, top: pad.offsetTop};
+    head.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  head.addEventListener('pointermove', (e) => {
+    if (!from) return;
+    pad.style.left = Math.max(4, from.left + e.clientX - from.x) + 'px';
+    pad.style.top = Math.max(4, from.top + e.clientY - from.y) + 'px';
+    drawAll();      // the leader follows it
+  });
+  for (const ev of ['pointerup', 'pointercancel']) {
+    head.addEventListener(ev, () => { from = null; });
+  }
+}
+
+// Tapping away closes the pad, and asks first when something has been written
+// and not kept. Cancel leaves the pad exactly as it was: nothing written is
+// ever thrown away by a stray tap, only by the × or by clear.
+function padGuard() {
+  if (pad.hidden) return true;
+  const unchanged = PAD_EDIT && JSON.stringify(HAND) === PAD_WAS;
+  if ((!HAND.length && !PAD_EDIT) || unchanged) { closePad(); return true; }
+  // Said in one line on purpose: this template is a python string, and a
+  // newline escape written here is consumed before the browser sees it.
+  if (confirm('Something is written and not kept yet. '
+              + 'OK keeps it as a note, Cancel goes back to the pad.')) {
+    savePad();
+    return true;
+  }
+  return false;
+}
+
+// Two taps, not one. A single tap is too easy to make by accident with a hand
+// on the glass, and it was closing windows nobody meant to close. Two taps on
+// the text open a note there; two taps on anything else close what is open.
+const DOUBLE_MS = 380;
+const HOLD_MS = 500;    // a press this long means the same as tapping twice
+let lastTap = null;
+let tapFrom = null;
+let holdTimer = null;
+let heldFired = false;
+
+function cancelHold() {
+  clearTimeout(holdTimer);
+  holdTimer = null;
+}
+
+// One tap on the text does nothing, and to anybody who has not been told that
+// reads as the reader not working. So once it is clear no second tap is
+// coming, it says what does. Not more often than every few seconds: a tap
+// while reading is often only a hand finding its place.
+const HINT_EVERY = 4000;
+let hintTimer = null, lastHintAt = 0;
+
+function cancelTapHint() {
+  clearTimeout(hintTimer);
+  hintTimer = null;
+}
+
+// whether a point is on something a note can be put on, without picking it
+function onText(target, clientX, clientY) {
+  const page = target && target.closest ? target.closest('.page') : null;
+  if (!page || target.closest('.pin')) return false;
+  const n = Number(page.dataset.page);
+  const [x, y] = toPdf(page, clientX, clientY);
+  return !!(sentenceAt(n, x, y) || wordAt(n, x, y) || figureAt(n, x, y));
+}
+
+function hintAfterTap(target, clientX, clientY) {
+  cancelTapHint();
+  if (!pad.hidden || !document.getElementById('sheet').hidden) return;
+  if (!onText(target, clientX, clientY)) return;
+  hintTimer = setTimeout(() => {
+    hintTimer = null;
+    if (Date.now() - lastHintAt < HINT_EVERY) return;
+    lastHintAt = Date.now();
+    toast(TOOL === 'pen' ? 'Tap twice or hold on a sentence to write about it'
+                         : 'Tap twice or hold to put a note on this', 1600);
+  }, DOUBLE_MS + 40);
+}
+
+document.addEventListener('pointerdown', (e) => {
+  tapFrom = null;
+  heldFired = false;
+  cancelHold();
+  cancelTapHint();          // a second tap is on its way, or something else is
+  if (e.target.closest('#pad, #sheet, #quick-save, #searchbar, #occur, .tools, header')) return;
+  if (e.pointerType === 'pen' || isPalm(e)) return;
+  tapFrom = {x: e.clientX, y: e.clientY, at: Date.now(), target: e.target};
+  // Holding still is the same as tapping twice. Two taps are quick when you
+  // know the trick and invisible when you do not; a press is what a hand
+  // reaches for on its own.
+  holdTimer = setTimeout(() => {
+    if (!tapFrom) return;
+    heldFired = true;
+    if (navigator.vibrate) { try { navigator.vibrate(12); } catch (err) {} }
+    pickHere(tapFrom.target, tapFrom.x, tapFrom.y);
+  }, HOLD_MS);
+}, true);
+
+document.addEventListener('pointermove', (e) => {
+  if (!tapFrom) return;
+  if (Math.abs(e.clientX - tapFrom.x) + Math.abs(e.clientY - tapFrom.y) > TAP_SLOP) {
+    cancelHold();          // it turned into a scroll
+    tapFrom = null;
+  }
+}, true);
+
+for (const ev of ['pointerup', 'pointercancel']) {
+  document.addEventListener(ev, (e) => {
+    const from = tapFrom;
+    tapFrom = null;
+    cancelHold();
+    if (heldFired) { heldFired = false; lastTap = null; return; }
+    if (!from || ev === 'pointercancel') return;
+    const still = Math.abs(e.clientX - from.x) + Math.abs(e.clientY - from.y) < TAP_SLOP;
+    if (!still || Date.now() - from.at > 700) return;   // a drag
+    const near = lastTap
+      && Date.now() - lastTap.at < DOUBLE_MS
+      && Math.abs(e.clientX - lastTap.x) + Math.abs(e.clientY - lastTap.y) < 34;
+    lastTap = {x: e.clientX, y: e.clientY, at: Date.now()};
+    if (!near) { hintAfterTap(e.target, e.clientX, e.clientY); return; }
+    lastTap = null;
+    pickHere(e.target, e.clientX, e.clientY);
+  }, true);
+}
+
+// the browser's own long press would put a selection or a context menu on top
+// of ours, and there is nothing on these pages for either of them to act on
+for (const ev of ['contextmenu']) {
+  document.addEventListener(ev, (e) => {
+    if (e.target.closest('.page')) e.preventDefault();
+  });
+}
+
+// Two taps on a sentence, a word or a figure put a note there, and so does
+// holding a finger on it; either gesture anywhere else closes whatever window
+// is open.
+function pickHere(target, clientX, clientY) {
+  const page = target && target.closest ? target.closest('.page') : null;
+  const onPin = target && target.closest && target.closest('.pin');
+  if (page && !onPin) {
+    const el = page;
+    const n = Number(el.dataset.page);
+    const picked = pickUnderFinger(el, clientX, clientY);
+    if (picked) {
+      if (!pad.hidden && !padGuard()) return;     // never lose what is written
+      if (TOOL === 'pen') { openPad(); }
+      else {
+        openNote({page: n, kind: SEL.kind, rects: selectionRects(),
+                  anchor: selectionText(), label: SEL.label, tag: 'AUTO'});
+      }
+      return;
+    }
+  }
+  if (!pad.hidden) padGuard();
+  else if (!document.getElementById('sheet').hidden) sheetGuard();
+}
+
+document.getElementById('pad-close').onclick = () => {
+  if (PAD_EDIT) {
+    if (JSON.stringify(HAND) === PAD_WAS
+        || confirm('Throw these changes away? The note stays as it was.')) closePad();
+    return;
+  }
+  if (!HAND.length || confirm('Discard what you have written?')) closePad();
+};
+document.getElementById('pad-undo').onclick = () => {
+  if (!PAD_UNDO.length) { toast('Nothing to undo'); return; }
+  HAND = PAD_UNDO.pop();
+  drawPad();
+};
+document.getElementById('pad-clear').onclick = () => {
+  if (!HAND.length || confirm('Throw this note away?')) {
+    remember(PAD_UNDO, HAND);       // and undo brings it back
+    HAND = [];
+    drawPad();
+  }
+};
+document.getElementById('pad-tag').addEventListener('change', (e) => {
+  PAD_TAG = e.target.value;
+});
+
+function savePad() {
+  const was = PAD_EDIT;
+  // a note that still has words or ink may lose all of its handwriting
+  const keepsSomething = was && (was.note || (was.ink && was.ink.length));
+  if (!HAND.length && !keepsSomething) { toast('Nothing written yet'); return; }
+  if (!padTarget) { toast('Nothing to attach it to'); return; }
+  const btn = document.getElementById('pad-save');
+  btn.disabled = true;
+  // Changing a note replaces it where it stands: its id, what it is about,
+  // its words and its ink go back unchanged with the new handwriting.
+  const body = was ? {
+    id: was.id, page: was.page, kind: was.kind || 'region',
+    rect: was.rect || [0, 0, 0, 0], rects: was.rects || [],
+    tag: PAD_TAG, note: was.note || '', ink: was.ink || [],
+    hand: HAND, pad: padSize(),
+  } : {
+    page: padTarget.page,
+    kind: padTarget.kind,
+    rect: [0, 0, 0, 0],
+    rects: selectionRects(),
+    tag: PAD_TAG,
+    hand: HAND,
+    pad: padSize(),
+    ink: PENDING.length && strokePage === padTarget.page ? PENDING : [],
+  };
+  postJSON('/paper/' + PID + '/note', body)
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'unknown error');
+      closePad(); if (!was) clearInk(); SEL = null; load();
+      toast((was ? 'Changed, on ' : 'Kept, on ') + (data.note.source && data.note.source.file
+        ? data.note.source.file + ':' + data.note.source.line : 'page ' + data.note.page));
+    })
+    .catch(err => toast('Not kept: ' + err.message, 5000))
+    .finally(() => { btn.disabled = false; });
+}
+
+document.getElementById('pad-save').onclick = savePad;
+
+window.addEventListener('resize', () => { if (!pad.hidden) { placePad(); drawPad(); } });
+
+// --- wiring ---------------------------------------------------------------
+const HINTS = {
+  read: 'Read: scroll and pinch as usual. Two taps or a hold opens a note',
+  note: 'Note: tap twice, or hold, on a sentence, a word or a figure',
+  pen: 'Pen: tap twice or hold on a sentence, then write in the pad beside it',
+};
+
+function setGrain(name) {
+  GRAIN = name;
+  for (const b of document.querySelectorAll('.grain .tool')) {
+    b.classList.toggle('on', b.dataset.grain === name);
+  }
+  document.getElementById('hint').textContent = HINTS[TOOL] || HINTS.note;
+}
+
+function setTool(name) {
+  TOOL = name;
+  document.body.classList.toggle('pen', name === 'pen');
+  for (const b of document.querySelectorAll('.tool[data-tool]')) {
+    b.classList.toggle('on', b.dataset.tool === name);
+  }
+  document.getElementById('grain').hidden = !(name === 'note' || name === 'pen');
+  document.getElementById('tool-mode').hidden = name !== 'pen';
+  if (name === 'note' || name === 'pen') {
+    for (const b of document.querySelectorAll('.grain .tool')) {
+      b.classList.toggle('on', b.dataset.grain === GRAIN);
+    }
+  }
+  document.getElementById('hint').textContent = HINTS[name];
+  if (name !== 'pen' && PENDING.length) toast('The ink is still there, waiting to be kept');
+  if (name === 'pen' && !PENDING.length && !SEL) {
+    toast('Press a sentence with your finger first if the note is about one', 3200);
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const mode = e.target.closest('.pad-mode .pm[data-mode]');
+  if (mode) { setPenMode(mode.dataset.mode); return; }
+  const show = e.target.closest('#shows .tool[data-show]');
+  if (show) { setShow(show.dataset.show, !SHOW[show.dataset.show]); return; }
+  const grain = e.target.closest('.grain .tool[data-grain]');
+  if (grain) { setGrain(grain.dataset.grain); return; }
+  const tool = e.target.closest('.tool[data-tool]');
+  if (tool) { setTool(tool.dataset.tool); return; }
+  if (e.target.closest('#sheet-widen')) { widenToSentence(); return; }
+  const g = e.target.closest('.grow-sel button[data-grow]');
+  if (g) { growSelection(Number(g.dataset.grow)); return; }
+  const tag = e.target.closest('#sheet-tags .tag');
+  if (tag) {
+    for (const b of document.querySelectorAll('#sheet-tags .tag')) b.classList.remove('on');
+    tag.classList.add('on');
+    return;
+  }
+
+});
+
+document.getElementById('sheet-cancel').onclick = sheetGuard;
+document.getElementById('sheet-save').onclick = saveNote;
+document.getElementById('quick-save').onclick = saveNote;
+window.addEventListener('resize', placeQuickSave);
+document.getElementById('sheet-close').onclick = sheetGuard;
+document.getElementById('sheet-prev').onclick = () => stepNote(-1);
+document.getElementById('sheet-next').onclick = () => stepNote(1);
+document.getElementById('sheet-del').onclick = () => {
+  if (!EDIT || !EDIT.id) return;
+  postJSON('/paper/' + PID + '/drop', {id: EDIT.id})
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'unknown error');
+      closeSheet(); load(); toast('Dropped');
+    })
+    .catch(err => toast('Not dropped: ' + err.message, 5000));
+};
+
+document.getElementById('ink-save').onclick = () => {
+  // the ink of a note taken up again goes back to that note, all of it rubbed
+  // out included, and through its panel so the words can be changed with it
+  if (INK_EDIT) {
+    const ink = PENDING;
+    const again = Object.assign({}, INK_EDIT, {ink: ink});
+    // ink that is the whole of what a region note is about moves it with it
+    if (again.kind === 'region' && ink.length) { again.rect = inkBounds(); again.rects = []; }
+    openNote(again);
+    return;
+  }
+  if (!PENDING.length) return;
+  // ink written about something chosen with the finger belongs to that, not
+  // to the patch of page it happens to sit on: the note is anchored to the
+  // sentence and the strokes travel with it
+  if (SEL && SEL.page === strokePage) {
+    openNote({page: strokePage, kind: SEL.kind, rects: selectionRects(),
+              anchor: selectionText(), label: SEL.label, ink: PENDING,
+              tag: 'AUTO'});
+  } else {
+    openNote({page: strokePage, rect: inkBounds(), kind: 'region',
+              ink: PENDING, tag: 'AUTO'});
+  }
+};
+document.getElementById('ink-undo').onclick = () => {
+  if (!INK_UNDO.length) { toast('Nothing to undo'); return; }
+  PENDING = INK_UNDO.pop();
+  // back to no ink at all is the same as never having started, unless it is
+  // a note's ink being changed, where none is an answer to keep
+  if (!PENDING.length && !INK_EDIT) clearInk(); else drawAll();
+};
+document.getElementById('ink-clear').onclick = () => {
+  const was = INK_EDIT;
+  clearInk();
+  toast(was ? 'The ink of ' + was.id + ' is left as it was' : 'Ink cleared');
+};
+document.getElementById('sheet-rewrite').onclick = () => { if (EDIT) rewriteHand(EDIT); };
+// Review asks first what to look for, in the field beside it, and goes on the
+// second press: a general read when the field is left empty
+document.getElementById('ask-review').onclick = (e) => {
+  const focus = document.getElementById('review-focus');
+  if (focus.hidden) {
+    focus.hidden = false;
+    e.target.textContent = 'Start the review';
+    focus.focus();
+    return;
+  }
+  focus.hidden = true;
+  e.target.textContent = 'Review';
+  headerCall('/paper/' + PID + '/review', {focus: focus.value},
+    d => runnerName() + ' is reading the paper. Its notes appear as it writes them, each to approve or reject.',
+    e.target);
+};
+document.getElementById('review-focus').onkeydown = (e) => {
+  if (e.key === 'Enter') document.getElementById('ask-review').click();
+  if (e.key === 'Escape') {
+    e.target.hidden = true;
+    document.getElementById('ask-review').textContent = 'Review';
+  }
+};
+document.getElementById('ask-agent').onclick = (e) => headerCall(
+  '/paper/' + PID + '/agent', {again: META && META.agent && !!META.agent.state},
+  d => runnerName() + ' is answering the round of ' + d.round + '. The notes fill in as it goes.', e.target);
+document.getElementById('commit').onclick = (e) => headerCall(
+  '/paper/' + PID + '/commit', {branch: false},
+  d => 'Committed ' + d.commit + ' on ' + d.branch + ': ' + d.notes.length + ' note(s). Versions shows it.',
+  e.target);
+document.getElementById('commit-branch').onclick = (e) => headerCall(
+  '/paper/' + PID + '/commit', {branch: true},
+  d => 'Committed ' + d.commit + ' on ' + d.branch + '. Take it or drop it when you have read it.',
+  e.target);
+document.getElementById('take').onclick = (e) => headerCall(
+  '/paper/' + PID + '/branch', {what: 'take'},
+  d => 'Took ' + d.took + ' into ' + d.branch + ' (' + d.how + ').', e.target);
+document.getElementById('drop').onclick = (e) => headerCall(
+  '/paper/' + PID + '/branch', {what: 'drop'},
+  d => 'Dropped ' + d.dropped + '; back on ' + d.branch + '.', e.target);
+document.getElementById('sheet-reink').onclick = () => { if (EDIT) reinkNote(EDIT); };
+
+// --- zooming the paper, and only the paper --------------------------------
+//
+// Resizing the pages around a point rather than scaling a picture of them:
+// the point on the paper that was under the fingers stays under them, and
+// the pages are the right size the moment the fingers lift. Which page the
+// point is on, and where on it, is what is kept: the gaps between the pages
+// do not grow with them, so a position down the whole column would drift.
+const pagesHost = document.getElementById('pages');
+
+function anchorAt(clientX, clientY) {
+  let best = null, gap = 1e9;
+  for (const el of document.querySelectorAll('.page')) {
+    const r = el.getBoundingClientRect();
+    const d = clientY < r.top ? r.top - clientY : clientY > r.bottom ? clientY - r.bottom : 0;
+    if (d < gap) { gap = d; best = {el: el, r: r}; }
+    if (!d) break;
+  }
+  if (!best) return null;
+  return {el: best.el, fx: (clientX - best.r.left) / best.r.width,
+          fy: (clientY - best.r.top) / best.r.height};
+}
+
+function zoomAround(scale, clientX, clientY, anchor) {
+  ZSCALE = Math.min(ZMAX, Math.max(ZMIN, scale));
+  const w = pageWidth();
+  for (const el of document.querySelectorAll('.page')) el.style.setProperty('--w', w + 'px');
+  document.getElementById('zoom-label').textContent = zoomLabel();
+  if (!anchor) return;
+  const r = anchor.el.getBoundingClientRect();
+  pagesHost.scrollLeft += r.left + anchor.fx * r.width - clientX;
+  pagesHost.scrollTop += r.top + anchor.fy * r.height - clientY;
+}
+
+// the buttons zoom about the middle of what is on screen
+function zoomBy(factor) {
+  const box = pagesHost.getBoundingClientRect();
+  const cx = box.left + box.width / 2, cy = box.top + box.height / 2;
+  let next = ZSCALE * factor;
+  if (Math.abs(next - 1) < 0.04) next = 1;
+  zoomAround(next, cx, cy, anchorAt(cx, cy));
+  relayout();
+}
+
+document.getElementById('zoom-in').onclick = () => zoomBy(ZSTEP);
+document.getElementById('zoom-out').onclick = () => zoomBy(1 / ZSTEP);
+
+// Two fingers on the paper. Never while the pen is in play, and never with a
+// palm among them: a hand resting on the glass beside the pen is two
+// contacts, and zooming the page under a sentence being written is the worst
+// thing this could do. The canvases redraw once, when the fingers lift; while
+// they move the ink is the picture of itself, stretched.
+let pinch = null;
+
+function twoFingers(e) {
+  if (e.touches.length !== 2) return null;
+  const [a, b] = e.touches;
+  if ([a, b].some(t => 2 * Math.max(t.radiusX || 0, t.radiusY || 0) > PALM_SIZE)) return null;
+  return {d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+          x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2};
+}
+
+pagesHost.addEventListener('touchstart', (e) => {
+  const two = twoFingers(e);
+  if (!two || Date.now() - lastPenAt < PEN_GRACE || !two.d) return;
+  e.preventDefault();
+  pinch = {d: two.d, scale: ZSCALE, anchor: anchorAt(two.x, two.y)};
+  // whatever the first finger had started is not happening now
+  cancelHold(); cancelTapHint();
+  tapFrom = null; lastTap = null; pan = null;
+}, {passive: false});
+
+pagesHost.addEventListener('touchmove', (e) => {
+  if (!pinch) return;
+  const two = twoFingers(e);
+  if (!two) return;
+  e.preventDefault();
+  zoomAround(pinch.scale * two.d / pinch.d, two.x, two.y, pinch.anchor);
+}, {passive: false});
+
+for (const ev of ['touchend', 'touchcancel']) {
+  pagesHost.addEventListener(ev, (e) => {
+    if (!pinch || e.touches.length >= 2) return;
+    pinch = null;
+    if (Math.abs(ZSCALE - 1) < 0.04) ZSCALE = 1;
+    relayout();
+    if (!pad.hidden) placePad();
+  });
+}
+
+// On an iPad the Pencil scrolls the page like a finger unless told not to, and
+// the page is told only while the pen is seen hovering, which most iPads cannot
+// report: so the page slid under the Pencil and the ink landed off the line.
+// Safari marks a Pencil touch as a stylus, and that one is kept from scrolling
+// wherever the pen writes; a finger still scrolls.
+function writing(e) {
+  return TOOL === 'pen' || !pad.hidden;
+}
+for (const ev of ['touchstart', 'touchmove']) {
+  document.addEventListener(ev, (e) => {
+    if (!writing(e)) return;
+    if ([...e.changedTouches].some(t => t.touchType === 'stylus')
+        && e.target.closest && e.target.closest('.page, #pad')) {
+      e.preventDefault();
+    }
+  }, {passive: false});
+}
+
+let scrollDraw = null;
+pagesHost.addEventListener('scroll', () => {
+  if (scrollDraw) return;
+  scrollDraw = requestAnimationFrame(() => { scrollDraw = null; drawAll(); });
+}, {passive: true});
+
+// Safari's own gesture events, which it fires for a pinch whatever the CSS says
+for (const ev of ['gesturestart', 'gesturechange']) {
+  document.addEventListener(ev, (e) => e.preventDefault(), {passive: false});
+}
+
+document.getElementById('finish').onclick = () => {
+  const n = (META.open || []).length;
+  if (!n) { toast('No new notes to send'); return; }
+  if (!confirm('Send ' + n + ' note' + (n === 1 ? '' : 's') + ' to the paper repo and commit?')) return;
+  const btn = document.getElementById('finish');
+  btn.disabled = true;
+  postJSON('/paper/' + PID + '/export')
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'unknown error');
+      // the server says where the round went, because that is not always a
+      // commit: a draft read for somebody else leaves as a marked-up PDF
+      toast(data.said || (data.committed
+              ? ('Committed ' + data.notes + ' notes in the paper repo')
+              : ('Written, not committed: ' + (data.git || 'see the repo'))), 6000);
+      load();
+    })
+    .catch(err => toast('Not sent: ' + err.message, 6000))
+    .finally(() => { btn.disabled = false; });
+};
+
+document.getElementById('rebuild').onclick = () => {
+  if (CUSTOM_BUILD) {
+    toast('This paper has its own build command; run it from a terminal', 5000);
+    return;
+  }
+  const btn = document.getElementById('rebuild');
+  btn.disabled = true;
+  toast('Building, this takes a moment', 60000);
+  postJSON('/paper/' + PID + '/build')
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'unknown error');
+      META = data; render(); showState();
+      toast('Rebuilt: ' + data.build.pages + ' pages from ' + (data.build.commit || 'the working tree'));
+    })
+    .catch(err => toast('Build failed: ' + err.message, 8000))
+    .finally(() => { btn.disabled = false; });
+};
+
+function showState() {
+  const el = document.getElementById('state');
+  if (!META || !META.built) { el.textContent = 'not built'; return; }
+  const open = (META.open || []).length, past = (META.past || []).length;
+  const every = open + past + (META.claude_notes || []).length;
+  const hidden = every - allNotes().length;
+  const chip = document.getElementById('fixes-chip');
+  const waiting = allNotes().filter(n => waitingFixes(n).length).length;
+  chip.hidden = !waiting;
+  chip.textContent = 'Fixes (' + waiting + ')';
+  showAgentAndCommit();
+  el.innerHTML = META.build.pages + ' pages · built from <b>'
+    + (META.build.commit || 'working tree') + '</b>'
+    + (META.stale ? ' <span class="stale">· the source has moved on</span>' : '')
+    + ' · ' + open + ' to send' + (past ? ', ' + past + ' sent before' : '')
+    + (hidden ? ' · <span class="stale">' + hidden + ' hidden</span>' : '');
+}
+
+function load() {
+  for (const b of document.querySelectorAll('#shows .tool')) {
+    b.classList.toggle('on', !!SHOW[b.dataset.show]);
+  }
+  return fetch('/paper/' + PID + '/meta').then(r => r.json()).then(data => {
+    if (!data.ok) throw new Error(data.error || 'unknown error');
+    const first = META === null;
+    META = data;
+    if (first || !document.querySelector('.page')) render();
+    else { placePins(); drawAll(); }
+    showState();
+  }).catch(err => toast('Could not read the paper: ' + err.message, 6000));
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!document.getElementById('searchbar').hidden) { closeSearch(); return; }
+  if (!pad.hidden) padGuard();
+  else sheetGuard();
+});
+
+// --- search ---------------------------------------------------------------
+// Orderless, as emacs has it: the words in any order, !word for without, a
+// capital to match case. The server reads every sentence of every page, and
+// the matches are drawn where they are on the pages and listed, emacs's
+// occur, each one a tap away.
+const FOUND = {q: '', matches: [], at: -1, more: false};
+let searchWait = null;
+
+function openSearch() {
+  const bar = document.getElementById('searchbar');
+  bar.hidden = false;
+  const q = document.getElementById('q');
+  q.focus();
+  q.select();
+}
+
+function closeSearch() {
+  document.getElementById('searchbar').hidden = true;
+  document.getElementById('occur').hidden = true;
+  document.getElementById('q-list').classList.remove('on');
+  FOUND.matches = []; FOUND.at = -1;
+  drawHits();
+}
+
+function runSearch() {
+  const q = document.getElementById('q').value.trim();
+  if (q === FOUND.q) return;
+  FOUND.q = q;
+  if (!q) { FOUND.matches = []; FOUND.at = -1; drawHits(); drawOccur(); countHits(); return; }
+  fetch('/paper/' + PID + '/search?q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(d => {
+      if (FOUND.q !== q) return;             // typed on since
+      FOUND.matches = d.matches || []; FOUND.more = !!d.more;
+      FOUND.at = FOUND.matches.length ? 0 : -1;
+      drawHits(); drawOccur(); countHits();
+      if (FOUND.at >= 0) goToHit(0, false);
+    })
+    .catch(() => {});
+}
+
+function countHits() {
+  const n = FOUND.matches.length;
+  document.getElementById('q-count').textContent = !FOUND.q ? ''
+    : n ? (FOUND.at + 1) + ' of ' + n + (FOUND.more ? '+' : '') : 'none';
+}
+
+function drawHits() {
+  for (const old of document.querySelectorAll('.hitband')) old.remove();
+  FOUND.matches.forEach((m, k) => {
+    const el = document.querySelector('.page[data-page="' + m.page + '"]');
+    if (!el || !META) return;
+    const size = META.build.sizes[m.page - 1];
+    for (const r of m.rects) {
+      const band = document.createElement('div');
+      band.className = 'hitband' + (k === FOUND.at ? ' now' : '');
+      band.dataset.k = k;
+      band.style.left = (100 * r[0] / size[0]) + '%';
+      band.style.top = (100 * r[1] / size[1]) + '%';
+      band.style.width = (100 * Math.max(r[2] - r[0], 3) / size[0]) + '%';
+      band.style.height = (100 * Math.max(r[3] - r[1], 3) / size[1]) + '%';
+      el.appendChild(band);
+    }
+  });
+}
+
+function drawOccur() {
+  const box = document.getElementById('occur');
+  box.innerHTML = '';
+  FOUND.matches.forEach((m, k) => {
+    const row = document.createElement('div');
+    row.className = 'row' + (k === FOUND.at ? ' now' : '');
+    const pg = document.createElement('span');
+    pg.className = 'pg';
+    pg.textContent = 'p. ' + m.page;
+    const said = document.createElement('span');
+    let at = 0;
+    for (const [a, b] of m.spans || []) {
+      if (a > at) said.appendChild(document.createTextNode(m.text.slice(at, a)));
+      const mk = document.createElement('mark');
+      mk.textContent = m.text.slice(a, b);
+      said.appendChild(mk);
+      at = b;
+    }
+    if (at < m.text.length) said.appendChild(document.createTextNode(m.text.slice(at)));
+    row.append(pg, said);
+    row.onclick = () => goToHit(k, true);
+    box.appendChild(row);
+  });
+  if (FOUND.more) {
+    const more = document.createElement('div');
+    more.className = 'more';
+    more.textContent = 'and more: another word narrows it';
+    box.appendChild(more);
+  }
+}
+
+function goToHit(k, fromList) {
+  if (!FOUND.matches.length) return;
+  FOUND.at = (k + FOUND.matches.length) % FOUND.matches.length;
+  const m = FOUND.matches[FOUND.at];
+  for (const b of document.querySelectorAll('.hitband')) {
+    b.classList.toggle('now', Number(b.dataset.k) === FOUND.at);
+  }
+  for (const r of document.querySelectorAll('#occur .row')) r.classList.remove('now');
+  const row = document.querySelectorAll('#occur .row')[FOUND.at];
+  if (row) { row.classList.add('now'); if (!fromList) row.scrollIntoView({block: 'nearest'}); }
+  bringIntoView({page: m.page, rect: m.rects[0]});
+  countHits();
+}
+
+document.getElementById('find-btn').onclick = openSearch;
+document.getElementById('q-close').onclick = closeSearch;
+document.getElementById('q-next').onclick = () => goToHit(FOUND.at + 1);
+document.getElementById('q-prev').onclick = () => goToHit(FOUND.at - 1);
+document.getElementById('q-list').onclick = (e) => {
+  const box = document.getElementById('occur');
+  box.hidden = !box.hidden;
+  e.target.classList.toggle('on', !box.hidden);
+};
+document.getElementById('q').addEventListener('input', () => {
+  clearTimeout(searchWait);
+  searchWait = setTimeout(runSearch, 220);
+});
+document.getElementById('q').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    clearTimeout(searchWait);
+    if (document.getElementById('q').value.trim() !== FOUND.q) { runSearch(); return; }
+    goToHit(FOUND.at + (e.shiftKey ? -1 : 1));
+  }
+});
+// / or Ctrl+F opens it: the browser's own find has only images to search here
+document.addEventListener('keydown', (e) => {
+  const typing = e.target.closest && e.target.closest('input, textarea, select');
+  if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f')) {
+    e.preventDefault();
+    openSearch();
+  }
+});
+
+let resizeWait = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeWait);
+  resizeWait = setTimeout(() => { if (META && META.built) relayout(); }, 120);
+});
+load();
+</script>

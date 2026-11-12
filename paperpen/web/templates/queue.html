@@ -1,0 +1,115 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>the queue · paperpen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="/favicon.svg">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #eef1f5; --paper: #ffffff; --ink: #172b4d; --muted: #5e6c84;
+    --bar: #dfe3ea; --accent: #0079bf; --line: #8883;
+    --SCIENCE: #d9822b; --LANGUAGE: #0079bf; --QUESTION: #6554c0;
+    --TODO: #5e6c84; --AUTO: #97a0af; --claude: #00a3bf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12151b; --paper: #262c38; --ink: #e6e9ef; --muted: #9aa3b2; --bar: #1c212b; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink);
+         font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif; }
+  header { display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap;
+           padding: .9rem 1rem; background: var(--bar); position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 1rem; margin: 0; font-weight: 700; }
+  header .count { font-size: .75rem; color: var(--muted); }
+  header .grow { flex: 1 1 auto; }
+  header a { color: var(--muted); font-size: .75rem; text-decoration: none; }
+  header a:hover { color: var(--accent); }
+
+  .filters { display: flex; gap: .35rem; flex-wrap: wrap; padding: .6rem 1rem;
+             background: var(--bar); border-top: 1px solid var(--line); }
+  .chip { font-size: .7rem; padding: .25rem .6rem; border-radius: 999px; text-decoration: none;
+          border: 1px solid var(--line); color: var(--muted); background: var(--paper); }
+  .chip.on { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
+  .chip .n { opacity: .65; margin-left: .25rem; }
+
+  main { padding: 1rem; max-width: 1100px; margin: 0 auto; }
+  .row { display: flex; gap: .8rem; align-items: flex-start; padding: .7rem .8rem;
+         background: var(--paper); border-radius: 9px; margin-bottom: .5rem;
+         border-left: 3px solid var(--tag); box-shadow: 0 1px 3px rgba(9,30,66,.14); }
+  .where { flex: 0 0 11rem; min-width: 0; }
+  .where .paper { font-size: .76rem; font-weight: 600; line-height: 1.2; }
+  .where .at { font-size: .66rem; color: var(--muted); font-family: ui-monospace, monospace;
+               line-height: 1.5; }
+  .what { flex: 1 1 auto; min-width: 0; }
+  .what .said { font-size: .82rem; line-height: 1.35; }
+  .what .said.none { color: var(--muted); font-style: italic; }
+  .what .quote { font-size: .7rem; color: var(--muted); margin-top: .2rem;
+                 border-left: 2px solid var(--line); padding-left: .45rem;
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: .3rem; }
+  select { font: inherit; font-size: .68rem; padding: .15rem .3rem; border-radius: 5px;
+           border: 1px solid var(--line); background: var(--bg); color: var(--tag); font-weight: 600; }
+  .age { font-size: .64rem; color: var(--muted); }
+  .who { font-size: .6rem; text-transform: uppercase; letter-spacing: .05em;
+         color: var(--claude); font-weight: 700; }
+  .nothing { font-size: .85rem; color: var(--muted); }
+  .find-list { font: inherit; font-size: .78rem; border: 1px solid var(--line); border-radius: 999px;
+               padding: .28rem .8rem; background: var(--paper); color: var(--ink); min-width: 0;
+               flex: 0 1 16rem; }
+  /* hidden means hidden, whatever display a card or a row is given */
+  [hidden] { display: none !important; }
+</style>
+
+<header>
+  <h1>the queue</h1>
+  <span class="count">{{ tally.total }} open across {{ tally.papers }} paper{{ '' if tally.papers == 1 else 's' }}{% for a, n in tally.agents.items() %}, {{ n }} from {{ a }}{% endfor %}</span>
+  <span class="grow"></span>
+  <a href="/">&larr; the shelf</a>
+</header>
+
+<div class="filters">
+  <input class="find-list" id="find-note" type="search" autocomplete="off"
+         placeholder="find a note (/)" title="words in any order, !word to leave one out">
+  <a class="chip {{ '' if want.tag or want.who or want.unclassified else 'on' }}" href="/queue">everything<span class="n">{{ tally.total }}</span></a>
+  {% for t in tags %}
+    <a class="chip {{ 'on' if want.tag == t else '' }}" href="/queue?tag={{ t }}">{{ 'unclassified' if t == 'AUTO' else t | lower }}<span class="n">{{ tally.tags[t] }}</span></a>
+  {% endfor %}
+  {% for a, n in tally.agents.items() %}<a class="chip {{ 'on' if want.who == a else '' }}" href="/queue?who={{ a }}">{{ a }}<span class="n">{{ n }}</span></a>{% endfor %}
+</div>
+
+<main>
+{% for r in rows %}
+  <div class="row" style="--tag: var(--{{ r.tag }})">
+    <div class="where">
+      <div class="paper"><a href="/paper/{{ r.paper }}" style="color: inherit; text-decoration: none">{{ r.paper_name }}</a></div>
+      <div class="at">p{{ r.page }}{% if r.source %} · {{ r.source }}{% endif %}</div>
+      <div class="at">{{ r.where }}</div>
+    </div>
+    <div class="what">
+      <div class="said {{ '' if r.text else 'none' }}">{{ r.text or 'nothing written' }}</div>
+      {% if r.anchor %}<div class="quote">{{ r.anchor }}</div>{% endif %}
+    </div>
+    <div class="side">
+      {% if r.who != 'you' %}<span class="who">{{ r.who }}</span>{% endif %}
+      <select onchange="reclass('{{ r.paper }}', '{{ r.id }}', this.value)">
+        {% for t in tags %}<option value="{{ t }}" {{ 'selected' if r.tag == t else '' }}>{{ 'unclassified' if t == 'AUTO' else t | lower }}</option>{% endfor %}
+      </select>
+      <span class="age">{{ 'today' if r.age == 0 else (r.age ~ 'd') }}</span>
+    </div>
+  </div>
+{% else %}
+  <p class="nothing">Nothing open. Every note has been answered.</p>
+{% endfor %}
+</main>
+
+<script src="/orderless.js"></script>
+<script>
+Orderless.filter(document.getElementById('find-note'), () => document.querySelectorAll('main .row'));
+
+function reclass(paper, id, tag) {
+  fetch('/queue/classify', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({paper: paper, id: id, tag: tag})})
+    .then(r => r.json()).then(d => { if (!d.ok) alert(d.error); location.reload(); });
+}
+</script>

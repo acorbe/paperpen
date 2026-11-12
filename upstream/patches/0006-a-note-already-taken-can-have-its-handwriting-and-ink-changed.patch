@@ -1,0 +1,283 @@
+diff --git a/reader.html b/reader.html
+index cced89f..35c7596 100644
+--- a/reader.html
++++ b/reader.html
+@@ -132,6 +132,16 @@
+     background: var(--bg); border: 1px solid #8883; border-radius: 8px;
+   }
+   #sheet-hand[hidden] { display: none; }
++  /* going back into a note's own handwriting, or its ink on the page */
++  .sheet-redo { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap;
++                margin: -.2rem 0 .6rem; }
++  .sheet-redo[hidden] { display: none; }
++  .sheet-redo button {
++    border: 1px solid #8883; background: var(--bg); color: var(--ink);
++    border-radius: 6px; padding: .3rem .7rem; font: inherit; font-size: .75rem; cursor: pointer;
++  }
++  .sheet-redo button[hidden] { display: none; }
++  .sheet-redo .said { font-size: .7rem; color: var(--muted); }
+   .grow-sel { display: flex; gap: .35rem; align-items: center; margin: -.3rem 0 .6rem; }
+   .grow-sel[hidden] { display: none; }
+   .grow-sel button {
+@@ -387,6 +397,11 @@
+   </div>
+   <blockquote class="quote" id="sheet-quote"></blockquote>
+   <canvas id="sheet-hand" hidden></canvas>
++  <div class="sheet-redo" id="sheet-redo" hidden>
++    <button type="button" id="sheet-rewrite" title="Open the pad with this handwriting in it">Change the handwriting</button>
++    <button type="button" id="sheet-reink" title="Take up this ink on the page again">Change the ink</button>
++    <span class="said" id="sheet-redo-said"></span>
++  </div>
+   <div class="grow-sel" id="sheet-grow" hidden>
+     <button type="button" data-grow="-1">&minus; sentence</button>
+     <button type="button" data-grow="1">+ sentence</button>
+@@ -714,6 +729,10 @@ function placePins() {
+ // Strokes are kept in PDF points, so they survive a zoom, a rebuild at another
+ // size, and the trip to the page crop the export writes.
+ let stroke = null, strokePage = null, pan = null;
++// A note whose ink has been taken up again: its strokes are PENDING while that
++// lasts, and it is not drawn from the note as well, or a stroke rubbed out
++// would still be there underneath.
++let INK_EDIT = null;
+ 
+ function drawAll() {
+   for (const el of document.querySelectorAll('.page')) {
+@@ -740,6 +759,7 @@ function drawAll() {
+       }
+     };
+     for (const n of allNotes()) {
++      if (INK_EDIT && n.id === INK_EDIT.id) continue;
+       if (n.page == el.dataset.page && n.ink && n.ink.length) {
+         paint(n.ink, n.status === 'done' ? 'rgba(120,130,150,.7)' : 'rgba(217,48,37,.85)');
+       }
+@@ -789,7 +809,8 @@ function penDown(e, el) {
+     const [kept, changed] = rubOut(PENDING, x, y, reach);
+     if (changed) {
+       PENDING = kept;
+-      if (!PENDING.length) clearInk(); else drawAll();
++      // rubbing out all of a note's ink is a change to keep, not a clear
++      if (!PENDING.length && !INK_EDIT) clearInk(); else drawAll();
+     }
+     return;
+   }
+@@ -973,11 +994,77 @@ function inkBounds() {
+ 
+ function clearInk() {
+   PENDING = []; strokePage = null; stroke = null;
++  INK_EDIT = null;
+   document.getElementById('ink-save').hidden = true;
++  document.getElementById('ink-save').textContent = 'Keep the ink as a note';
+   document.getElementById('ink-clear').hidden = true;
+   drawAll();
+ }
+ 
++// Whether a note can still be changed: it is ours, and in the round that is
++// open. One already sent is somebody's copy of what was said, and stays so.
++function changeable(note) {
++  return !!(note && note.id && !note.claude
++            && (META.open || []).some(n => n.id === note.id));
++}
++
++// The note's own strokes, handed back to the pad to be added to or rubbed out.
++// Moved to the pad's corner and the pad made big enough for them: they were
++// written in a pad that may have been any size, and where in it they sat is
++// not kept by anything downstream, which reads them from their own origin.
++function rewriteHand(note) {
++  if (!pad.hidden && !padGuard()) return;
++  const hand = (note.hand || []).map(st => st.map(p => [p[0], p[1]]));
++  closeSheet();
++  SEL = {page: note.page, kind: 'note', text: note.anchor || '',
++         rects: note.rects && note.rects.length ? note.rects : [note.rect]};
++  openPad();
++  PAD_EDIT = note;
++  PAD_TAG = note.tag || 'AUTO';
++  document.getElementById('pad-tag').value = PAD_TAG;
++  document.getElementById('pad-about').textContent =
++    (hand.length ? 'changing ' : 'writing on ') + note.id
++    + (note.anchor ? ', about: ' + note.anchor : '');
++  const pts = hand.flat();
++  if (pts.length) {
++    const edge = 12;
++    const x0 = Math.min(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1]));
++    const w = Math.max(...pts.map(p => p[0])) - x0, h = Math.max(...pts.map(p => p[1])) - y0;
++    HAND = hand.map(st => st.map(p => [p[0] - x0 + edge, p[1] - y0 + edge]));
++    const around = pad.offsetWidth - padCanvas.getBoundingClientRect().width;
++    pad.style.width = Math.min(window.innerWidth - 16,
++                               Math.max(pad.offsetWidth, w + 2 * edge + around)) + 'px';
++    padCanvas.style.height = Math.max(padCanvas.getBoundingClientRect().height,
++                                      h + 3 * edge) + 'px';
++  }
++  PAD_WAS = JSON.stringify(HAND);
++  placePad();
++  drawPad();
++  drawAll();
++}
++
++// The note's ink, on the page, live again: the pen adds to it and its button,
++// or Rub out, takes strokes away. Keeping it goes back through the note's own
++// panel, so the words and the handwriting travel with it unchanged.
++function reinkNote(note) {
++  if (PENDING.length && !INK_EDIT) {
++    toast('Keep or clear the ink already on the page first');
++    return;
++  }
++  closeSheet();
++  INK_EDIT = note;
++  PENDING = (note.ink || []).map(st => st.map(p => [p[0], p[1]]));
++  strokePage = note.page;
++  setTool('pen');
++  const keep = document.getElementById('ink-save');
++  keep.textContent = 'Keep the changed ink';
++  keep.hidden = false;
++  document.getElementById('ink-clear').hidden = false;
++  drawAll();
++  bringIntoView(note);
++  toast('The ink of ' + note.id + ' is live: write to add, rub out to take away', 4000);
++}
++
+ // --- the note sheet -------------------------------------------------------
+ function openNote(note) {
+   EDIT = Object.assign({}, note);
+@@ -1006,6 +1093,18 @@ function openNote(note) {
+   document.getElementById('sheet-save').hidden = !!note.claude;
+   document.getElementById('sheet-del').hidden = !!note.claude || !note.id
+     || (META.past || []).some(p => p.id === note.id);
++  // A note already taken can be gone back into: its handwriting in the pad,
++  // its ink on the page. A typed note can be written on the same way.
++  const redo = document.getElementById('sheet-redo');
++  const hasHand = !!(note.hand && note.hand.length), hasInk = !!(note.ink && note.ink.length);
++  const canChange = changeable(note);
++  redo.hidden = !note.id || note.claude || !(canChange || hasHand || hasInk);
++  const rewrite = document.getElementById('sheet-rewrite');
++  rewrite.hidden = !canChange;
++  rewrite.textContent = hasHand ? 'Change the handwriting' : 'Write on it';
++  document.getElementById('sheet-reink').hidden = !(canChange && hasInk);
++  document.getElementById('sheet-redo-said').textContent = canChange ? ''
++    : 'Sent with an earlier round, so it stays as it was sent.';
+   document.getElementById('sheet').hidden = false;
+   showNav(note);
+   showHand(note);
+@@ -1167,9 +1266,15 @@ function saveNote() {
+     tag: tagEl ? tagEl.dataset.tag : 'AUTO',
+     note: document.getElementById('sheet-text').value.trim(),
+     ink: EDIT.ink || [],
++    // Sent back as they are. A save is a replacement, and a note saved from
++    // this panel without them lost its handwriting to a change of tag.
++    hand: EDIT.hand || [],
++    pad: EDIT.pad || [],
+   };
+   if (EDIT.id) body.id = EDIT.id;
+-  if (!body.note && !(body.ink && body.ink.length)) { toast('Write something, or keep some ink'); return; }
++  if (!body.note && !body.ink.length && !body.hand.length) {
++    toast('Write something, or keep some ink'); return;
++  }
+   document.getElementById('sheet-save').disabled = true;
+   postJSON('/paper/' + PID + '/note', body)
+     .then(data => {
+@@ -1194,6 +1299,8 @@ let HAND = [];          // strokes in pad coordinates
+ let padStroke = null;
+ let PAD_TAG = 'AUTO';
+ let padTarget = null;   // the selection the pad is writing about
++let PAD_EDIT = null;    // the note whose handwriting the pad holds, if it is one
++let PAD_WAS = '';       // what that handwriting was, to tell a change from none
+ 
+ function padSize() {
+   const box = padCanvas.getBoundingClientRect();
+@@ -1275,6 +1382,8 @@ function openPad() {
+ function closePad() {
+   pad.hidden = true;
+   padTarget = null;
++  PAD_EDIT = null;
++  PAD_WAS = '';
+   HAND = [];
+   drawAll();
+ }
+@@ -1389,7 +1498,8 @@ for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+ // ever thrown away by a stray tap, only by the × or by clear.
+ function padGuard() {
+   if (pad.hidden) return true;
+-  if (!HAND.length) { closePad(); return true; }
++  const unchanged = PAD_EDIT && JSON.stringify(HAND) === PAD_WAS;
++  if ((!HAND.length && !PAD_EDIT) || unchanged) { closePad(); return true; }
+   // Said in one line on purpose: this template is a python string, and a
+   // newline escape written here is consumed before the browser sees it.
+   if (confirm('Something is written and not kept yet. '
+@@ -1493,6 +1603,11 @@ function pickHere(target, clientX, clientY) {
+ }
+ 
+ document.getElementById('pad-close').onclick = () => {
++  if (PAD_EDIT) {
++    if (JSON.stringify(HAND) === PAD_WAS
++        || confirm('Throw these changes away? The note stays as it was.')) closePad();
++    return;
++  }
+   if (!HAND.length || confirm('Discard what you have written?')) closePad();
+ };
+ document.getElementById('pad-undo').onclick = () => { HAND.pop(); drawPad(); };
+@@ -1504,11 +1619,21 @@ document.getElementById('pad-tag').addEventListener('change', (e) => {
+ });
+ 
+ function savePad() {
+-  if (!HAND.length) { toast('Nothing written yet'); return; }
++  const was = PAD_EDIT;
++  // a note that still has words or ink may lose all of its handwriting
++  const keepsSomething = was && (was.note || (was.ink && was.ink.length));
++  if (!HAND.length && !keepsSomething) { toast('Nothing written yet'); return; }
+   if (!padTarget) { toast('Nothing to attach it to'); return; }
+   const btn = document.getElementById('pad-save');
+   btn.disabled = true;
+-  const body = {
++  // Changing a note replaces it where it stands: its id, what it is about,
++  // its words and its ink go back unchanged with the new handwriting.
++  const body = was ? {
++    id: was.id, page: was.page, kind: was.kind || 'region',
++    rect: was.rect || [0, 0, 0, 0], rects: was.rects || [],
++    tag: PAD_TAG, note: was.note || '', ink: was.ink || [],
++    hand: HAND, pad: padSize(),
++  } : {
+     page: padTarget.page,
+     kind: padTarget.kind,
+     rect: [0, 0, 0, 0],
+@@ -1521,8 +1646,8 @@ function savePad() {
+   postJSON('/paper/' + PID + '/note', body)
+     .then(data => {
+       if (!data.ok) throw new Error(data.error || 'unknown error');
+-      closePad(); clearInk(); SEL = null; load();
+-      toast('Kept, on ' + (data.note.source && data.note.source.file
++      closePad(); if (!was) clearInk(); SEL = null; load();
++      toast((was ? 'Changed, on ' : 'Kept, on ') + (data.note.source && data.note.source.file
+         ? data.note.source.file + ':' + data.note.source.line : 'page ' + data.note.page));
+     })
+     .catch(err => toast('Not kept: ' + err.message, 5000))
+@@ -1605,6 +1730,16 @@ document.getElementById('sheet-del').onclick = () => {
+ };
+ 
+ document.getElementById('ink-save').onclick = () => {
++  // the ink of a note taken up again goes back to that note, all of it rubbed
++  // out included, and through its panel so the words can be changed with it
++  if (INK_EDIT) {
++    const ink = PENDING;
++    const again = Object.assign({}, INK_EDIT, {ink: ink});
++    // ink that is the whole of what a region note is about moves it with it
++    if (again.kind === 'region' && ink.length) { again.rect = inkBounds(); again.rects = []; }
++    openNote(again);
++    return;
++  }
+   if (!PENDING.length) return;
+   // ink written about something chosen with the finger belongs to that, not
+   // to the patch of page it happens to sit on: the note is anchored to the
+@@ -1618,7 +1753,13 @@ document.getElementById('ink-save').onclick = () => {
+               ink: PENDING, tag: 'AUTO'});
+   }
+ };
+-document.getElementById('ink-clear').onclick = () => { clearInk(); toast('Ink cleared'); };
++document.getElementById('ink-clear').onclick = () => {
++  const was = INK_EDIT;
++  clearInk();
++  toast(was ? 'The ink of ' + was.id + ' is left as it was' : 'Ink cleared');
++};
++document.getElementById('sheet-rewrite').onclick = () => { if (EDIT) rewriteHand(EDIT); };
++document.getElementById('sheet-reink').onclick = () => { if (EDIT) reinkNote(EDIT); };
+ 
+ document.getElementById('zoom-in').onclick = () => {
+   ZOOM = Math.min(ZOOM + 1, ZOOMS.length - 1); relayout();

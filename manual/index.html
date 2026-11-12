@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>What it is · paperpen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Read a paper on a tablet, mark it up with a pen, and get the marks back anchored to the source.">
+<link rel="stylesheet" href="manual.css">
+<header class="top">
+  <a class="mark" href="index.html">paperpen</a>
+  <nav><a href="index.html" class="here">What it is</a>
+    <a href="reading.html">Reading a paper</a>
+    <a href="writing.html">Writing it back</a>
+    <a href="network.html">The tablet, over the network</a>
+    <a href="agents.html">Working the queue</a>
+    <a href="commands.html">Every command</a></nav>
+</header>
+<main>
+<h1>Read a paper with a pen, and get the marks back</h1>
+<p class="lede">paperpen puts a paper on a tablet, takes pen marks on it, and
+returns each one anchored to the line of LaTeX that made the sentence, or as a
+PDF with the notes in the margin, for whoever wrote the paper.</p>
+
+<p>It exists because the round trip is where the work is lost. A draft is read
+away from the desk, the marks are made on glass, and then somebody sits down
+and retypes them into the source from memory. paperpen keeps the anchor: a note
+made on a sentence comes back as <code>sec_results.tex:41</code> and the
+sentence it sat on, so the note can be acted on rather than reconstructed.</p>
+
+<figure>
+  <img src="shots/shelf.png" alt="The shelf: four papers grouped by who is waiting">
+  <figcaption>The shelf groups papers by who is waiting on whom: a reading in
+  progress, a round sent and unanswered, and the ones with nothing
+  outstanding.</figcaption>
+</figure>
+
+<h2>The loop</h2>
+<ol>
+  <li><b>Add a paper.</b> A LaTeX repository, a folder, or a PDF somebody sent
+  you.</li>
+  <li><b>Read it</b> in a browser, on a tablet, with a stylus. Notes are typed
+  or handwritten, and both are kept.</li>
+  <li><b>Finish the round.</b> The notes are delivered the way that paper is
+  delivered: committed into its repository, written to a folder, or turned into
+  a marked-up PDF to send.</li>
+  <li><b>Act on them</b> in the source, and mark each note done or rejected
+  with what was decided. paperpen starts an agent in the paper's checkout to
+  do it, or you run a session there by hand (see
+  <a href="reading.html#after-finish-and-send">After Finish and send</a>). The
+  next reading shows what happened to the last one.</li>
+</ol>
+
+<h2>Starting it</h2>
+<p>Python 3.10 or newer, and <code>latexmk</code> for a paper with LaTeX
+behind it. With <a href="https://docs.astral.sh/uv/">uv</a>:</p>
+<pre><code>git clone https://github.com/acorbe/paperpen.git
+cd paperpen
+uv run paperpen add ~/papers/my-manuscript      # or a .pdf
+uv run paperpen serve</code></pre>
+<p>It prints where it is, and that is the address to open:</p>
+<pre><code>registry ~/.config/paperpen/papers.json
+cache    ~/.cache/paperpen
+shelf    http://127.0.0.1:8770/
+reader   http://127.0.0.1:8770/paper/&lt;id&gt;   ·   queue http://127.0.0.1:8770/queue</code></pre>
+<p>Without uv, a virtual environment and <code>pip install -e .</code> gives
+the same <code>paperpen</code> command. Either way nothing is installed
+system-wide and nothing runs as a service.</p>
+
+<div class="note"><b>Loopback by default.</b> The server listens on
+<code>127.0.0.1</code> and is reachable only from the machine it runs on.
+Putting it where the tablet can see it is a deliberate second step, and it is
+closed with a login unless you choose otherwise: see <a href="network.html">the network page</a>.</div>
+
+<h2>Where things are kept</h2>
+<table>
+  <tr><th>What</th><th>Where</th><th>Lifetime</th></tr>
+  <tr><td>The registry</td><td><code>~/.config/paperpen/papers.json</code></td>
+      <td>Configuration. Small, hand-editable, worth backing up.</td></tr>
+  <tr><td>The cache</td><td><code>~/.cache/paperpen/&lt;paper&gt;/</code></td>
+      <td>Built PDFs, rendered pages, version builds. Delete it freely; it is
+      made again.</td></tr>
+  <tr><td>The rounds</td><td><code>~/.local/share/paperpen/&lt;paper&gt;/</code></td>
+      <td>What was read and said, and where it went. This cannot be made
+      again.</td></tr>
+  <tr><td>The paper</td><td>its own repository</td>
+      <td>Output, not state: a delivered round is committed there as
+      <code>review/&lt;date&gt;/</code>.</td></tr>
+</table>
+<p><code>paperpen where</code> prints the four, which is the quickest way to
+find out what a machine is actually using. Each takes an environment override
+(<code>PAPERPEN_HOME</code>, <code>PAPERPEN_CACHE</code>,
+<code>PAPERPEN_DATA</code>), and a <code>.paperpen/papers.json</code> in the
+current directory wins over all of them, so a folder of drafts can carry its
+own shelf and be moved whole.</p>
+<div class="next"><span></span><a href="reading.html">Reading a paper &rarr;</a></div>
+</main>
+<footer>
+  Read a paper on a tablet, mark it up with a pen, get the marks back where the
+  paper is written. · <a href="index.html">the manual</a> ·
+  by <a href="https://github.com/acorbe">acorbe</a>
+</footer>
+</html>

@@ -1,0 +1,151 @@
+diff --git a/reader.html b/reader.html
+index b0d7ba4..f91c640 100644
+--- a/reader.html
++++ b/reader.html
+@@ -390,11 +390,11 @@
+      title="Every fix proposed for this paper's notes, to choose from">Fixes</a>
+   <span class="agent-said" id="agent-said" hidden></span>
+   <button id="ask-agent" type="button" hidden
+-          title="claude answers the newest round: applies what leaves no choice, proposes the rest">Ask claude</button>
++          title="the agent answers the newest round: applies what leaves no choice, proposes the rest">Ask claude</button>
+   <input id="review-focus" type="text" hidden autocomplete="off"
+          placeholder="what to look for (optional): clarity, notation…">
+   <button id="ask-review" type="button" hidden
+-          title="claude reads the paper first and writes notes of its own, each with its fix, for you to approve or reject">Review</button>
++          title="the agent reads the paper first and writes notes of its own, each with its fix, for you to approve or reject">Review</button>
+   <button id="commit" type="button" hidden
+           title="Commit what the applied fixes changed, and nothing else">Commit</button>
+   <button id="commit-branch" type="button" hidden
+@@ -814,6 +814,11 @@ const SHOW_STORE = 'paper-show';
+ // on the page is what is still waiting. `fixes` on: only the notes with a fix
+ // to choose, which after an answered round is the work there is.
+ let SHOW = {past: true, claude: true, answered: false, fixes: false, proposals: false};
++// who writes notes of their own and answers rounds: claude, or codex. META says
++// which are agents and which one runs for this paper; the names are what their
++// notes and fixes are signed with.
++function isAgent(by) { return !!by && ((META && META.agents) || ['claude']).indexOf(by) >= 0; }
++function runnerName() { return (META && META.agent && META.agent.runner) || 'claude'; }
+ try {
+   const saved = JSON.parse(localStorage.getItem(SHOW_STORE) || 'null');
+   if (saved) SHOW = Object.assign(SHOW, saved);
+@@ -831,10 +836,10 @@ function allNotes() {
+     out = out.concat((META.claude_notes || []).map(n => Object.assign({claude: true}, n)));
+   }
+   if (SHOW.fixes) out = out.filter(n => waitingFixes(n).length);
+-  // Claude's proposals are sent notes with an author: the Claude chip hides
++  // the agent's proposals are sent notes with an author: the Claude chip hides
+   // them with the rest of Claude's, `proposals` shows nothing else
+-  if (!SHOW.claude) out = out.filter(n => n.by !== 'claude');
+-  if (SHOW.proposals) out = out.filter(n => n.by === 'claude' && !answered(n));
++  if (!SHOW.claude) out = out.filter(n => !isAgent(n.by));
++  if (SHOW.proposals) out = out.filter(n => isAgent(n.by) && !answered(n));
+   return out;
+ }
+ 
+@@ -864,7 +869,7 @@ function placePins() {
+     // a sentence that wraps gets a band per line, not one block over the lot
+     for (const r of (n.rects && n.rects.length ? n.rects : [n.rect])) {
+       const band = document.createElement('div');
+-      band.className = 'band' + (n.claude || n.by === 'claude' ? ' claude' : '')
++      band.className = 'band' + (n.claude || isAgent(n.by) ? ' claude' : '')
+         + (n.status === 'done' ? ' done' : '');
+       band.style.left = pc(r[0], size[0]);
+       band.style.top = pc(r[1], size[1]);
+@@ -874,7 +879,7 @@ function placePins() {
+     }
+     const pin = document.createElement('button');
+     pin.className = 'pin ' + (n.claude ? 'claude' : n.tag) + (n.status === 'done' ? ' done' : '')
+-      + (waitingFixes(n).length ? ' has-fix' : '') + (n.by === 'claude' ? ' proposal' : '');
++      + (waitingFixes(n).length ? ' has-fix' : '') + (isAgent(n.by) ? ' proposal' : '');
+     pin.textContent = n.claude ? 'C' : (i + 1);
+     let px = n.rect[2], py = (n.rect[1] + n.rect[3]) / 2;
+     while (taken.some(t => t.page === n.page
+@@ -1533,13 +1538,13 @@ function showFixes(note) {
+   box.innerHTML = '';
+   const said = answersOf(note);
+   const open = !(note.status === 'done' || note.status === 'rejected');
+-  // a note of Claude's own is there to be decided, with a fix or without
+-  const proposal = note.by === 'claude';
++  // a note of the agent's own is there to be decided, with a fix or without
++  const proposal = isAgent(note.by);
+   box.hidden = !(said.fixes.length || said.thread.length || (proposal && open));
+   if (box.hidden) return;
+   const waiting = said.fixes.filter(f => f.state === 'proposed').length;
+   box.append(fxMake('div', 'fx-head', proposal && open
+-    ? (waiting ? 'Claude proposes this: approve or reject' : 'Claude remarks this, with no fix')
++    ? (waiting ? note.by + ' proposes this: approve or reject' : note.by + ' remarks this, with no fix')
+     : waiting && open
+     ? (waiting === 1 ? 'A fix is proposed' : waiting + ' fixes are proposed: choose one')
+     : 'What came back'));
+@@ -1687,7 +1692,7 @@ function undoFix(note, fix, button) {
+ }
+ 
+ // --- the agent, and what is waiting to be committed -------------------------
+-// What claude is doing with the round, said in the header while it does it,
++// What the agent is doing with the round, said in the header while it does it,
+ // and the review's commit one tap away: on the branch you are on, or on one
+ // of its own, to be taken or dropped.
+ let agentPoll = null;
+@@ -1700,33 +1705,34 @@ function showAgentAndCommit() {
+   said.hidden = !a.state;
+   said.className = 'agent-said ' + (a.state || '');
+   const reviewing = a.mode === 'review';
++  const who = a.runner || runnerName();
+   if (reviewing && a.state === 'running') {
+-    said.textContent = 'claude is reviewing the paper…';
++    said.textContent = who + ' is reviewing the paper…';
+   } else if (reviewing && a.state === 'failed') {
+-    said.textContent = 'claude could not review: ' + (a.said || 'see its log');
++    said.textContent = who + ' could not review: ' + (a.said || 'see its log');
+   } else if (reviewing && a.state === 'done') {
+-    said.textContent = 'claude proposed ' + (a.notes || 0) + ' note' + (a.notes === 1 ? '' : 's');
++    said.textContent = who + ' proposed ' + (a.notes || 0) + ' note' + (a.notes === 1 ? '' : 's');
+   } else if (a.state === 'running') {
+-    said.textContent = 'claude is answering the round of ' + a.round + '…';
++    said.textContent = who + ' is answering the round of ' + a.round + '…';
+   } else if (a.state === 'failed') {
+-    said.textContent = 'claude could not answer: ' + (a.said || 'see its log');
++    said.textContent = who + ' could not answer: ' + (a.said || 'see its log');
+   } else if (a.state === 'done') {
+-    said.textContent = 'claude answered the round of ' + a.round
++    said.textContent = who + ' answered the round of ' + a.round
+       + (a.branch ? ', on ' + a.branch : '');
+   } else if (a.state === 'stopped') {
+-    said.textContent = 'claude was stopped';
++    said.textContent = who + ' was stopped';
+   }
+   // someone to ask, and something to ask about: a sent note nobody has answered
+   const answers = (META && META.feedback) || {};
+   const unanswered = ((META && META.past) || []).some(n => !answered(n) && !answers[n.id]
+-                                                         && n.by !== 'claude');
++                                                         && !isAgent(n.by));
+   ask.hidden = !(a.mode && a.mode !== 'off' && a.mode !== 'review' && a.state !== 'running'
+                  && unanswered);
+-  // a review needs a source to fix, and only one claude at a time
++  // a review needs a source to fix, and only one agent at a time
+   const review = document.getElementById('ask-review');
+   review.hidden = !META || /\.pdf$/i.test(META.main || '') || a.state === 'running';
+   if (review.hidden) document.getElementById('review-focus').hidden = true;
+-  ask.textContent = a.state && a.state !== 'running' ? 'Ask claude again' : 'Ask claude';
++  ask.textContent = 'Ask ' + runnerName() + (a.state && a.state !== 'running' ? ' again' : '');
+ 
+   const n = r.to_commit || 0;
+   document.getElementById('commit').hidden = !n || r.review_branch;
+@@ -2380,7 +2386,7 @@ document.getElementById('ask-review').onclick = (e) => {
+   focus.hidden = true;
+   e.target.textContent = 'Review';
+   headerCall('/paper/' + PID + '/review', {focus: focus.value},
+-    d => 'claude is reading the paper. Its notes appear as it writes them, each to approve or reject.',
++    d => runnerName() + ' is reading the paper. Its notes appear as it writes them, each to approve or reject.',
+     e.target);
+ };
+ document.getElementById('review-focus').onkeydown = (e) => {
+@@ -2392,7 +2398,7 @@ document.getElementById('review-focus').onkeydown = (e) => {
+ };
+ document.getElementById('ask-agent').onclick = (e) => headerCall(
+   '/paper/' + PID + '/agent', {again: META && META.agent && !!META.agent.state},
+-  d => 'claude is answering the round of ' + d.round + '. The notes fill in as it goes.', e.target);
++  d => runnerName() + ' is answering the round of ' + d.round + '. The notes fill in as it goes.', e.target);
+ document.getElementById('commit').onclick = (e) => headerCall(
+   '/paper/' + PID + '/commit', {branch: false},
+   d => 'Committed ' + d.commit + ' on ' + d.branch + ': ' + d.notes.length + ' note(s). Versions shows it.',

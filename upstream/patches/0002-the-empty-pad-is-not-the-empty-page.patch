@@ -1,0 +1,13 @@
+diff --git a/reader.html b/reader.html
+index c5f4e19..5e8b6a7 100644
+--- a/reader.html
++++ b/reader.html
+@@ -251,7 +251,7 @@
+     font-size: .8rem; max-width: 90vw;
+   }
+   #toast[hidden] { display: none; }
+-  .empty { padding: 2rem; text-align: center; color: var(--muted); font-size: .9rem; }
++  #pages .empty { padding: 2rem; text-align: center; color: var(--muted); font-size: .9rem; }
+ </style>
+ 
+ <header>

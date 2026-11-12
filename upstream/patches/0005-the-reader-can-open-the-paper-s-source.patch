@@ -1,0 +1,13 @@
+diff --git a/reader.html b/reader.html
+index fc923c6..cced89f 100644
+--- a/reader.html
++++ b/reader.html
+@@ -265,6 +265,8 @@
+   <span class="grow"></span>
+   <a class="chip" href="/paper/{pid}/versions"
+      title="This paper as it was, and what changed since">Versions</a>
++  <a class="chip" href="/paper/{pid}/edit"
++     title="Write the source, with the build beside it">Edit</a>
+   <button id="rebuild" type="button">Rebuild</button>
+   <button class="go" id="finish" type="button">Finish and send</button>
+ </header>

@@ -1,0 +1,289 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>{{ title ~ " · paperpen" if title else "the shelf · paperpen" }}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="/favicon.svg">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #eef1f5; --paper: #ffffff; --ink: #172b4d; --muted: #5e6c84;
+    --bar: #dfe3ea; --accent: #0079bf; --line: #8883;
+    --reading: #36b37e; --waiting: #d9822b; --idle: #5e6c84;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12151b; --paper: #262c38; --ink: #e6e9ef; --muted: #9aa3b2; --bar: #1c212b; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  header {
+    display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap;
+    padding: .9rem 1rem; background: var(--bar); position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 1rem; margin: 0; font-weight: 700; letter-spacing: .01em; }
+  header .count { font-size: .75rem; color: var(--muted); }
+  header .grow { flex: 1 1 auto; }
+  header a { color: var(--muted); font-size: .75rem; text-decoration: none; }
+  header a:hover { color: var(--accent); }
+
+  main { padding: 1rem; max-width: 1180px; margin: 0 auto; }
+  section { margin-bottom: 1.6rem; }
+  section h2 {
+    font-size: .8rem; margin: 0 0 .1rem; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--state);
+  }
+  section p.blurb { margin: 0 0 .7rem; font-size: .72rem; color: var(--muted); }
+  section.reading { --state: var(--reading); }
+  section.waiting { --state: var(--waiting); }
+  section.idle    { --state: var(--idle); }
+
+  .grid { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+  .card {
+    display: flex; gap: .85rem; padding: .8rem; background: var(--paper);
+    border-radius: 10px; box-shadow: 0 1px 4px rgba(9,30,66,.18);
+    border-left: 3px solid var(--state); text-decoration: none; color: inherit;
+  }
+  .card:hover { box-shadow: 0 2px 10px rgba(9,30,66,.3); }
+  .slot { position: relative; display: flex; }
+  .slot .card { flex: 1 1 auto; }
+  .ways { position: absolute; right: .5rem; bottom: .45rem; display: flex; gap: .25rem; }
+  .ways a {
+    font-size: .62rem; color: var(--muted); text-decoration: none;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
+    padding: .05rem .3rem;
+  }
+  .ways a:hover { color: var(--accent); border-color: var(--accent); }
+  .ways a.choose { background: var(--accent); color: #fff; border-color: transparent;
+                  font-weight: 600; }
+
+  /* The first page, at the proportions of a page. A paper not yet built keeps
+     the same footprint, so a shelf does not reflow the moment one is built. */
+  .thumb {
+    flex: 0 0 auto; width: 92px; height: 130px; border-radius: 3px;
+    background: var(--bg); border: 1px solid var(--line); overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+  .thumb.empty { font-size: .6rem; color: var(--muted); text-align: center; padding: .4rem; }
+
+  .body { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: .3rem; }
+  .name { font-size: .88rem; font-weight: 600; line-height: 1.25; }
+  .badges { display: flex; gap: .3rem; flex-wrap: wrap; }
+  .badge {
+    font-size: .6rem; text-transform: uppercase; letter-spacing: .05em;
+    padding: .1rem .35rem; border-radius: 4px; border: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .badge.kind { border-color: var(--accent); color: var(--accent); }
+  .meta { font-size: .68rem; color: var(--muted); font-family: ui-monospace, monospace; }
+  .brief {
+    font-size: .7rem; color: var(--muted); line-height: 1.35;
+    border-left: 2px solid var(--line); padding-left: .5rem; margin: .1rem 0;
+  }
+  .state { font-size: .73rem; margin-top: auto; }
+  .state b { color: var(--state); }
+  .nothing { font-size: .8rem; color: var(--muted); }
+
+  /* putting a paper on the shelf, and taking one off */
+  header button { font: inherit; font-size: .75rem; border: 1px solid var(--line);
+                  border-radius: 6px; padding: .3rem .7rem; background: var(--paper);
+                  color: var(--ink); cursor: pointer; }
+  header button.go { background: var(--accent); color: #fff; border-color: transparent;
+                     font-weight: 600; }
+  #adding { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center;
+            padding: .7rem 1rem; background: var(--bar); border-top: 1px solid var(--line); }
+  #adding[hidden] { display: none; }
+  #adding input, #adding select { font: inherit; font-size: .8rem; border: 1px solid var(--line);
+            border-radius: 6px; padding: .4rem .55rem; background: var(--paper); color: var(--ink); }
+  #adding .where { flex: 1 1 22rem; min-width: 0; }
+  #adding .main { flex: 0 1 9rem; min-width: 0; }
+  #adding button { font: inherit; font-size: .8rem; border-radius: 6px; padding: .45rem .9rem;
+            border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
+  #adding button.go { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+  #adding button[disabled] { opacity: .5; }
+  #adding .said { flex: 1 0 100%; font-size: .74rem; color: var(--muted); }
+  #adding .said.bad { color: #c0392b; }
+  .ways a.remove.sure { background: #c0392b; color: #fff; border-color: transparent; }
+  .find-list { font: inherit; font-size: .78rem; border: 1px solid var(--line); border-radius: 999px;
+               padding: .28rem .8rem; background: var(--paper); color: var(--ink); min-width: 0;
+               flex: 0 1 16rem; }
+  #toast { position: fixed; left: 50%; bottom: calc(1.2rem + env(safe-area-inset-bottom));
+           transform: translateX(-50%); background: #172b4d; color: #fff; z-index: 40;
+           padding: .5rem 1rem; border-radius: 999px; font-size: .8rem; max-width: 92vw;
+           text-align: center; }
+  /* hidden means hidden, whatever display a card or a row is given */
+  [hidden] { display: none !important; }
+  header .by { font-size: 12px; color: #8a94a3; text-decoration: none; }
+  header .by:hover { text-decoration: underline; }
+</style>
+
+<header>
+  <h1>{{ title or "paperpen" }}</h1>
+  <a class="by" href="https://github.com/acorbe" target="_blank" rel="noopener">by acorbe</a>
+  <span class="count">{{ total }} paper{{ '' if total == 1 else 's' }}</span>
+  <span class="grow"></span>
+  <a href="/queue">the queue</a>
+  {# The rounds are the one thing here that cannot be made again, so the
+     tablet can take them without a terminal. The rendered ink is left out:
+     it comes back from the strokes and is most of the bytes. #}
+  <a href="/state.tar.gz" download title="the registry and every round, as one file">take the state</a>
+  {% if title %}<a href="/">&larr; the shelf</a>
+  {% elif archived %}<a href="/archived">{{ archived }} archived</a>{% endif %}
+  <input class="find-list" id="find-paper" type="search" autocomplete="off"
+         placeholder="find a paper (/)" title="words in any order, !word to leave one out">
+  {% if not title %}<button class="go" id="add" type="button">add a paper</button>{% endif %}
+</header>
+<form id="adding" hidden>
+  <input class="where" id="add-where" autocomplete="off" spellcheck="false"
+         placeholder="where it is on this machine: ~/papers/draft, or ~/Downloads/referee.pdf">
+  <select id="add-kind" title="what kind of read it is, which picks where a round goes">
+    {% for k in kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+  </select>
+  <input class="main" id="add-main" autocomplete="off" spellcheck="false"
+         placeholder="main .tex (found if left empty)">
+  <button class="go" type="submit" id="add-go">add</button>
+  <button type="button" id="add-cancel">cancel</button>
+  <span class="said" id="add-said">A LaTeX repository, a folder, or a PDF. It is built once before
+    it is kept, which takes a moment for a real paper.</span>
+</form>
+
+<main>
+{% for group in groups %}
+  <section class="{{ group.state }}">
+    <h2>{{ group.title }}</h2>
+    <p class="blurb">{{ group.blurb }}</p>
+    <div class="grid">
+    {% for p in group.papers %}
+      <div class="slot">
+      <a class="card" href="/paper/{{ p.id }}">
+        <div class="thumb {{ '' if p.thumb else 'empty' }}">
+          {% if p.thumb %}<img src="/paper/{{ p.id }}/thumb.png" alt="" loading="lazy">
+          {% else %}not built yet{% endif %}
+        </div>
+        <div class="body">
+          <div class="name">{{ p.name }}</div>
+          <div class="badges">
+            <span class="badge kind">{{ p.kind }}</span>
+            <span class="badge">{{ p.delivery }}</span>
+            {% if not p.synctex and p.built %}<span class="badge">no source lines</span>{% endif %}
+          </div>
+          <div class="meta">
+            {% if p.built %}{{ p.pages }}p · built {{ p.built_at }}{% if p.commit %} · {{ p.commit }}{% endif %}
+            {% else %}not built{% endif %}
+          </div>
+          {% if p.brief %}<div class="brief">{{ p.brief }}</div>{% endif %}
+          <div class="state">
+            {% if p.open %}<b>{{ p.open }} note{{ '' if p.open == 1 else 's' }}</b> in this reading{% if p.unclassified %}, {{ p.unclassified }} unclassified{% endif %}
+            {% elif p.outstanding %}<b>{{ p.outstanding }}</b> still open from {{ p.last_sent.date }}{% if p.last_sent.delivery == 'pdf' %}, sent as a PDF{% endif %}
+            {% elif p.last_sent %}last round {{ p.last_sent.date }}, answered
+            {% else %}no rounds yet{% endif %}
+          </div>
+        </div>
+      </a>
+      {# The other way into a paper: what it looked like before, and what
+         changed. A second link rather than a second card, because the paper
+         is the same one. #}
+      <span class="ways">
+        {% if p.to_choose %}<a class="choose" href="/paper/{{ p.id }}/feedback"
+           title="Fixes proposed for its notes, to choose from">{{ p.to_choose }} to choose</a>
+        {% elif not p.is_pdf %}<a href="/paper/{{ p.id }}/feedback"
+           title="Fixes proposed for its notes, and the replies">feedback</a>{% endif %}
+        {% if not p.is_pdf %}<a href="/paper/{{ p.id }}/edit"
+           title="Write the source, with the build beside it">edit</a>{% endif %}
+        <a href="/paper/{{ p.id }}/versions"
+           title="This paper as it was, and what changed since">versions</a>
+        <a class="remove" href="#" data-id="{{ p.id }}" data-name="{{ p.name }}"
+           title="Take it off the shelf; its files and its rounds stay where they are">remove</a>
+      </span>
+      </div>
+    {% endfor %}
+    </div>
+  </section>
+{% else %}
+  <p class="nothing">No papers yet. <b>add a paper</b> above, or <code>paperpen add &lt;repo-or-pdf&gt;</code>,
+    puts one on the shelf.</p>
+{% endfor %}
+</main>
+<div id="toast" hidden></div>
+
+<script src="/orderless.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+// a paper found by its name, its brief, its kind, anything on its card; a
+// group with none left is folded away
+Orderless.filter($('find-paper'), () => document.querySelectorAll('.slot'), () => {
+  for (const group of document.querySelectorAll('main > section')) {
+    group.hidden = ![...group.querySelectorAll('.slot')].some(s => !s.hidden);
+  }
+});
+let toastTimer = null;
+function toast(text, ms) {
+  const box = $('toast');
+  box.textContent = text;
+  box.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { box.hidden = true; }, ms || 3200);
+}
+async function post(url, body) {
+  const answer = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                   body: JSON.stringify(body || {})});
+  let data = {};
+  try { data = await answer.json(); } catch (e) { data = {}; }
+  if (!answer.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + answer.status));
+  return data;
+}
+
+// Adding: the path is on the machine that serves this, which is where the
+// papers are. It is built once before it is kept, as at the command line.
+const form = $('adding');
+if ($('add')) {
+  $('add').onclick = () => { form.hidden = !form.hidden; if (!form.hidden) $('add-where').focus(); };
+  $('add-cancel').onclick = () => { form.hidden = true; };
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const where = $('add-where').value.trim();
+    if (!where) { $('add-where').focus(); return; }
+    const said = $('add-said');
+    $('add-go').disabled = true;
+    said.classList.remove('bad');
+    said.textContent = 'building it once, to be sure it reads…';
+    try {
+      const got = await post('/papers/add', {where: where, kind: $('add-kind').value,
+                                             main: $('add-main').value.trim()});
+      said.textContent = 'on the shelf: ' + got.name;
+      location.reload();
+    } catch (err) {
+      said.classList.add('bad');
+      said.textContent = 'not added: ' + err.message;
+      $('add-go').disabled = false;
+    }
+  });
+}
+
+// Removing asks once, on the link itself: the first press says what it will
+// do and waits a few seconds for the second.
+for (const link of document.querySelectorAll('.ways a.remove')) {
+  let armed = null;
+  link.onclick = async event => {
+    event.preventDefault();
+    if (!armed) {
+      link.classList.add('sure');
+      link.textContent = 'remove? yes';
+      armed = setTimeout(() => { armed = null; link.classList.remove('sure'); link.textContent = 'remove'; }, 3500);
+      return;
+    }
+    clearTimeout(armed);
+    try {
+      await post('/paper/' + encodeURIComponent(link.dataset.id) + '/remove');
+      toast(link.dataset.name + ' is off the shelf. Its files and its rounds are kept; '
+            + '`paperpen add` puts it back.', 5000);
+      setTimeout(() => location.reload(), 1200);
+    } catch (err) {
+      toast('Not removed: ' + err.message, 5000);
+    }
+  };
+}
+</script>

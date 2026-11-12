@@ -1,0 +1,102 @@
+diff --git a/reader.html b/reader.html
+index 1a55177..e440133 100644
+--- a/reader.html
++++ b/reader.html
+@@ -71,6 +71,11 @@
+     box-shadow: 0 1px 6px rgba(9,30,66,.25); width: var(--w);
+   }
+   .page img { display: block; width: 100%; height: auto; }
++  /* the page is a picture, and a long press on it is ours: not Safari's Save
++     Image callout, nor its magnifier, nor a drag of the image */
++  #pages, .page, .page img, .page canvas {
++    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
++  }
+   .page canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+   /* the pen needs the surface to itself; in every other mode the finger
+      scrolls and pinches the page as it would any other document */
+@@ -563,7 +568,7 @@ function render() {
+     el.style.setProperty('--w', w + 'px');
+     el.style.aspectRatio = size[0] + ' / ' + size[1];
+     el.innerHTML =
+-      '<img loading="' + (n <= 2 ? 'eager' : 'lazy') + '" alt="page ' + n + '" '
++      '<img draggable="false" loading="' + (n <= 2 ? 'eager' : 'lazy') + '" alt="page ' + n + '" '
+       + 'src="/paper/' + PID + '/page/' + n + '.png?scale=2&v='
+         + encodeURIComponent(META.build.at) + '">'
+       + '<canvas></canvas><span class="pageno">' + n + ' / ' + META.build.pages + '</span>';
+@@ -837,12 +842,32 @@ function showInkButtons(on) {
+   }
+ }
+ 
++// Only the pages near the screen have a canvas the size of the page. iPad
++// Safari caps the memory of all canvases on a page, around 384 MB, and past it
++// a canvas is silently blank: a paper of twenty pages at the iPad's density
++// was most of that, a zoom took it past, and ink was written where it did not
++// show. A page far away gives its memory back and gets it again on the way.
++const MOST_PIXELS = 8e6;
++
++function nearScreen(box) {
++  const reach = window.innerHeight;
++  return box.bottom > -reach && box.top < window.innerHeight + reach;
++}
++
+ function drawAll() {
+   for (const el of document.querySelectorAll('.page')) {
+     const cv = el.querySelector('canvas');
+     const box = el.getBoundingClientRect();
+     if (!box.width) continue;
+-    const dpr = window.devicePixelRatio || 1;
++    if (!nearScreen(box)) {
++      if (cv.width > 1) { cv.width = 1; cv.height = 1; }
++      continue;
++    }
++    // and no canvas past Safari's own ceiling for one, about 16.7 million
++    // pixels: zoomed far in, the ink is drawn a little softer rather than not
++    // drawn at all
++    const dpr = Math.min(window.devicePixelRatio || 1,
++                         Math.sqrt(MOST_PIXELS / (box.width * box.height)));
+     cv.width = box.width * dpr;
+     cv.height = box.height * dpr;
+     const g = cv.getContext('2d');
+@@ -948,7 +973,10 @@ function penMove(e, el) {
+ }
+ 
+ const TAP_SLOP = 10;    // px a finger may wander and still count as a press
+-const PALM_SIZE = 38;   // px of contact above which a touch is a hand, not a tip
++// px of contact above which a touch is a hand, not a tip. iPad Safari reports a
++// fingertip as 40 to 70 across, which at 38 made every finger a palm and every
++// tap nothing; a resting palm is well past 90 on any tablet.
++const PALM_SIZE = 90;
+ const PEN_GRACE = 1600; // ms after the pen was last seen that touch is ignored
+ let lastPenAt = 0;
+ 
+@@ -2234,6 +2262,30 @@ for (const ev of ['touchend', 'touchcancel']) {
+   });
+ }
+ 
++// On an iPad the Pencil scrolls the page like a finger unless told not to, and
++// the page is told only while the pen is seen hovering, which most iPads cannot
++// report: so the page slid under the Pencil and the ink landed off the line.
++// Safari marks a Pencil touch as a stylus, and that one is kept from scrolling
++// wherever the pen writes; a finger still scrolls.
++function writing(e) {
++  return TOOL === 'pen' || !pad.hidden;
++}
++for (const ev of ['touchstart', 'touchmove']) {
++  document.addEventListener(ev, (e) => {
++    if (!writing(e)) return;
++    if ([...e.changedTouches].some(t => t.touchType === 'stylus')
++        && e.target.closest && e.target.closest('.page, #pad')) {
++      e.preventDefault();
++    }
++  }, {passive: false});
++}
++
++let scrollDraw = null;
++pagesHost.addEventListener('scroll', () => {
++  if (scrollDraw) return;
++  scrollDraw = requestAnimationFrame(() => { scrollDraw = null; drawAll(); });
++}, {passive: true});
++
+ // Safari's own gesture events, which it fires for a pinch whatever the CSS says
+ for (const ev of ['gesturestart', 'gesturechange']) {
+   document.addEventListener(ev, (e) => e.preventDefault(), {passive: false});

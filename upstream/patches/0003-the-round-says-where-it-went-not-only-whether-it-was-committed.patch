@@ -1,0 +1,18 @@
+diff --git a/reader.html b/reader.html
+index 5e8b6a7..93923dc 100644
+--- a/reader.html
++++ b/reader.html
+@@ -1628,8 +1628,11 @@ document.getElementById('finish').onclick = () => {
+   postJSON('/paper/' + PID + '/export')
+     .then(data => {
+       if (!data.ok) throw new Error(data.error || 'unknown error');
+-      toast(data.committed ? ('Committed ' + data.notes + ' notes in the paper repo')
+-                           : ('Written, not committed: ' + (data.git || 'see the repo')), 6000);
++      // the server says where the round went, because that is not always a
++      // commit: a draft read for somebody else leaves as a marked-up PDF
++      toast(data.said || (data.committed
++              ? ('Committed ' + data.notes + ' notes in the paper repo')
++              : ('Written, not committed: ' + (data.git || 'see the repo'))), 6000);
+       load();
+     })
+     .catch(err => toast('Not sent: ' + err.message, 6000))

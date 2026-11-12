@@ -1,0 +1,59 @@
+diff --git a/reader.html b/reader.html
+index 2b2c637..34736b6 100644
+--- a/reader.html
++++ b/reader.html
+@@ -1566,10 +1566,45 @@ function cancelHold() {
+   holdTimer = null;
+ }
+ 
++// One tap on the text does nothing, and to anybody who has not been told that
++// reads as the reader not working. So once it is clear no second tap is
++// coming, it says what does. Not more often than every few seconds: a tap
++// while reading is often only a hand finding its place.
++const HINT_EVERY = 4000;
++let hintTimer = null, lastHintAt = 0;
++
++function cancelTapHint() {
++  clearTimeout(hintTimer);
++  hintTimer = null;
++}
++
++// whether a point is on something a note can be put on, without picking it
++function onText(target, clientX, clientY) {
++  const page = target && target.closest ? target.closest('.page') : null;
++  if (!page || target.closest('.pin')) return false;
++  const n = Number(page.dataset.page);
++  const [x, y] = toPdf(page, clientX, clientY);
++  return !!(sentenceAt(n, x, y) || wordAt(n, x, y) || figureAt(n, x, y));
++}
++
++function hintAfterTap(target, clientX, clientY) {
++  cancelTapHint();
++  if (!pad.hidden || !document.getElementById('sheet').hidden) return;
++  if (!onText(target, clientX, clientY)) return;
++  hintTimer = setTimeout(() => {
++    hintTimer = null;
++    if (Date.now() - lastHintAt < HINT_EVERY) return;
++    lastHintAt = Date.now();
++    toast(TOOL === 'pen' ? 'Tap twice or hold on a sentence to write about it'
++                         : 'Tap twice or hold to put a note on this', 1600);
++  }, DOUBLE_MS + 40);
++}
++
+ document.addEventListener('pointerdown', (e) => {
+   tapFrom = null;
+   heldFired = false;
+   cancelHold();
++  cancelTapHint();          // a second tap is on its way, or something else is
+   if (e.target.closest('#pad, #sheet, .tools, header')) return;
+   if (e.pointerType === 'pen' || isPalm(e)) return;
+   tapFrom = {x: e.clientX, y: e.clientY, at: Date.now(), target: e.target};
+@@ -1605,7 +1640,7 @@ for (const ev of ['pointerup', 'pointercancel']) {
+       && Date.now() - lastTap.at < DOUBLE_MS
+       && Math.abs(e.clientX - lastTap.x) + Math.abs(e.clientY - lastTap.y) < 34;
+     lastTap = {x: e.clientX, y: e.clientY, at: Date.now()};
+-    if (!near) return;
++    if (!near) { hintAfterTap(e.target, e.clientX, e.clientY); return; }
+     lastTap = null;
+     pickHere(e.target, e.clientX, e.clientY);
+   }, true);

@@ -1,0 +1,225 @@
+diff --git a/reader.html b/reader.html
+index 8eacb7f..11b947c 100644
+--- a/reader.html
++++ b/reader.html
+@@ -48,6 +48,32 @@
+   header button.go { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+   header button[disabled] { opacity: .5; }
+ 
++  /* search: the matches drawn where they are, and listed, emacs's occur */
++  #searchbar { display: flex; gap: .4rem; align-items: center; padding: .4rem .7rem;
++               background: var(--bar); border-top: 1px solid #8882; flex: 0 0 auto; }
++  #searchbar[hidden] { display: none; }
++  #searchbar input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: .9rem;
++                     border: 1px solid #8884; border-radius: 8px; padding: .4rem .6rem;
++                     background: var(--paper); color: var(--ink); }
++  #searchbar .count { font-size: .74rem; color: var(--muted); white-space: nowrap; }
++  #searchbar button { border: 1px solid #8883; background: var(--paper); color: var(--ink);
++                      border-radius: 7px; padding: .35rem .7rem; font: inherit; font-size: .78rem;
++                      cursor: pointer; }
++  #searchbar button.on { background: var(--accent); color: #fff; border-color: transparent; }
++  .hitband { position: absolute; pointer-events: none; border-radius: 2px;
++             background: #ffd54f66; box-shadow: inset 0 -2px 0 #f0a500; }
++  .hitband.now { background: #ffb30099; box-shadow: 0 0 0 2px #f0a500; }
++  #occur { position: fixed; z-index: 28; right: .6rem; top: 7.5rem; bottom: .6rem;
++           width: min(26rem, 92vw); overflow: auto; background: var(--paper);
++           border: 1px solid #8884; border-radius: 10px; box-shadow: 0 6px 24px rgba(9,30,66,.3); }
++  #occur[hidden] { display: none; }
++  #occur .row { display: flex; gap: .5rem; padding: .45rem .65rem; font-size: .8rem;
++                line-height: 1.4; border-bottom: 1px solid #8882; cursor: pointer; }
++  #occur .row:hover, #occur .row.now { background: color-mix(in srgb, var(--accent) 10%, var(--paper)); }
++  #occur .pg { flex: 0 0 auto; color: var(--muted); font-size: .68rem; min-width: 2.2rem;
++               font-variant-numeric: tabular-nums; }
++  #occur mark { background: #ffd54f; color: inherit; border-radius: 2px; }
++  #occur .more { padding: .5rem .65rem; font-size: .72rem; color: var(--muted); }
+   .tools {
+     display: flex; align-items: center; gap: .35rem; padding: .4rem .7rem;
+     background: var(--bar); flex: 0 0 auto; overflow-x: auto; border-top: 1px solid #8882;
+@@ -390,6 +416,7 @@
+     </button>
+   </span>
+   <span class="sep"></span>
++  <button class="tool" id="find-btn" type="button" title="Search the paper (/ or Ctrl+F)" aria-label="Search"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+   <button class="tool" id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5M8 10.5h5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+   <span class="hint" id="zoom-label">fit</span>
+   <button class="tool" id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5M8 10.5h5M10.5 8v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+@@ -413,7 +440,17 @@
+   <span class="hint" id="hint">Read: scroll and pinch as usual</span>
+ </div>
+ 
++<div id="searchbar" hidden>
++  <input id="q" type="search" autocomplete="off" spellcheck="false"
++         placeholder="search the paper: words in any order, !word to leave one out">
++  <span class="count" id="q-count"></span>
++  <button type="button" id="q-prev" title="The match before (Shift+Enter)">&uarr;</button>
++  <button type="button" id="q-next" title="The next match (Enter)">&darr;</button>
++  <button type="button" id="q-list" title="Every match, listed">list</button>
++  <button type="button" id="q-close" title="Close (Esc)">&times;</button>
++</div>
+ <div id="pages"><div class="empty">loading the paper</div></div>
++<aside id="occur" hidden></aside>
+ 
+ <div id="pad" hidden>
+   <div class="pad-head" id="pad-head">
+@@ -2017,7 +2054,7 @@ document.addEventListener('pointerdown', (e) => {
+   heldFired = false;
+   cancelHold();
+   cancelTapHint();          // a second tap is on its way, or something else is
+-  if (e.target.closest('#pad, #sheet, #quick-save, .tools, header')) return;
++  if (e.target.closest('#pad, #sheet, #quick-save, #searchbar, #occur, .tools, header')) return;
+   if (e.pointerType === 'pen' || isPalm(e)) return;
+   tapFrom = {x: e.clientX, y: e.clientY, at: Date.now(), target: e.target};
+   // Holding still is the same as tapping twice. Two taps are quick when you
+@@ -2473,10 +2510,152 @@ function load() {
+ 
+ document.addEventListener('keydown', (e) => {
+   if (e.key !== 'Escape') return;
++  if (!document.getElementById('searchbar').hidden) { closeSearch(); return; }
+   if (!pad.hidden) padGuard();
+   else sheetGuard();
+ });
+ 
++// --- search ---------------------------------------------------------------
++// Orderless, as emacs has it: the words in any order, !word for without, a
++// capital to match case. The server reads every sentence of every page, and
++// the matches are drawn where they are on the pages and listed, emacs's
++// occur, each one a tap away.
++const FOUND = {q: '', matches: [], at: -1, more: false};
++let searchWait = null;
++
++function openSearch() {
++  const bar = document.getElementById('searchbar');
++  bar.hidden = false;
++  const q = document.getElementById('q');
++  q.focus();
++  q.select();
++}
++
++function closeSearch() {
++  document.getElementById('searchbar').hidden = true;
++  document.getElementById('occur').hidden = true;
++  document.getElementById('q-list').classList.remove('on');
++  FOUND.matches = []; FOUND.at = -1;
++  drawHits();
++}
++
++function runSearch() {
++  const q = document.getElementById('q').value.trim();
++  if (q === FOUND.q) return;
++  FOUND.q = q;
++  if (!q) { FOUND.matches = []; FOUND.at = -1; drawHits(); drawOccur(); countHits(); return; }
++  fetch('/paper/' + PID + '/search?q=' + encodeURIComponent(q))
++    .then(r => r.json())
++    .then(d => {
++      if (FOUND.q !== q) return;             // typed on since
++      FOUND.matches = d.matches || []; FOUND.more = !!d.more;
++      FOUND.at = FOUND.matches.length ? 0 : -1;
++      drawHits(); drawOccur(); countHits();
++      if (FOUND.at >= 0) goToHit(0, false);
++    })
++    .catch(() => {});
++}
++
++function countHits() {
++  const n = FOUND.matches.length;
++  document.getElementById('q-count').textContent = !FOUND.q ? ''
++    : n ? (FOUND.at + 1) + ' of ' + n + (FOUND.more ? '+' : '') : 'none';
++}
++
++function drawHits() {
++  for (const old of document.querySelectorAll('.hitband')) old.remove();
++  FOUND.matches.forEach((m, k) => {
++    const el = document.querySelector('.page[data-page="' + m.page + '"]');
++    if (!el || !META) return;
++    const size = META.build.sizes[m.page - 1];
++    for (const r of m.rects) {
++      const band = document.createElement('div');
++      band.className = 'hitband' + (k === FOUND.at ? ' now' : '');
++      band.dataset.k = k;
++      band.style.left = (100 * r[0] / size[0]) + '%';
++      band.style.top = (100 * r[1] / size[1]) + '%';
++      band.style.width = (100 * Math.max(r[2] - r[0], 3) / size[0]) + '%';
++      band.style.height = (100 * Math.max(r[3] - r[1], 3) / size[1]) + '%';
++      el.appendChild(band);
++    }
++  });
++}
++
++function drawOccur() {
++  const box = document.getElementById('occur');
++  box.innerHTML = '';
++  FOUND.matches.forEach((m, k) => {
++    const row = document.createElement('div');
++    row.className = 'row' + (k === FOUND.at ? ' now' : '');
++    const pg = document.createElement('span');
++    pg.className = 'pg';
++    pg.textContent = 'p. ' + m.page;
++    const said = document.createElement('span');
++    let at = 0;
++    for (const [a, b] of m.spans || []) {
++      if (a > at) said.appendChild(document.createTextNode(m.text.slice(at, a)));
++      const mk = document.createElement('mark');
++      mk.textContent = m.text.slice(a, b);
++      said.appendChild(mk);
++      at = b;
++    }
++    if (at < m.text.length) said.appendChild(document.createTextNode(m.text.slice(at)));
++    row.append(pg, said);
++    row.onclick = () => goToHit(k, true);
++    box.appendChild(row);
++  });
++  if (FOUND.more) {
++    const more = document.createElement('div');
++    more.className = 'more';
++    more.textContent = 'and more: another word narrows it';
++    box.appendChild(more);
++  }
++}
++
++function goToHit(k, fromList) {
++  if (!FOUND.matches.length) return;
++  FOUND.at = (k + FOUND.matches.length) % FOUND.matches.length;
++  const m = FOUND.matches[FOUND.at];
++  for (const b of document.querySelectorAll('.hitband')) {
++    b.classList.toggle('now', Number(b.dataset.k) === FOUND.at);
++  }
++  for (const r of document.querySelectorAll('#occur .row')) r.classList.remove('now');
++  const row = document.querySelectorAll('#occur .row')[FOUND.at];
++  if (row) { row.classList.add('now'); if (!fromList) row.scrollIntoView({block: 'nearest'}); }
++  bringIntoView({page: m.page, rect: m.rects[0]});
++  countHits();
++}
++
++document.getElementById('find-btn').onclick = openSearch;
++document.getElementById('q-close').onclick = closeSearch;
++document.getElementById('q-next').onclick = () => goToHit(FOUND.at + 1);
++document.getElementById('q-prev').onclick = () => goToHit(FOUND.at - 1);
++document.getElementById('q-list').onclick = (e) => {
++  const box = document.getElementById('occur');
++  box.hidden = !box.hidden;
++  e.target.classList.toggle('on', !box.hidden);
++};
++document.getElementById('q').addEventListener('input', () => {
++  clearTimeout(searchWait);
++  searchWait = setTimeout(runSearch, 220);
++});
++document.getElementById('q').addEventListener('keydown', (e) => {
++  if (e.key === 'Enter') {
++    e.preventDefault();
++    clearTimeout(searchWait);
++    if (document.getElementById('q').value.trim() !== FOUND.q) { runSearch(); return; }
++    goToHit(FOUND.at + (e.shiftKey ? -1 : 1));
++  }
++});
++// / or Ctrl+F opens it: the browser's own find has only images to search here
++document.addEventListener('keydown', (e) => {
++  const typing = e.target.closest && e.target.closest('input, textarea, select');
++  if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f')) {
++    e.preventDefault();
++    openSearch();
++  }
++});
++
+ let resizeWait = null;
+ window.addEventListener('resize', () => {
+   clearTimeout(resizeWait);

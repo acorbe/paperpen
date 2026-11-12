@@ -1,0 +1,614 @@
+[
+  {
+    "png": "00.png",
+    "caption": "Writing it back: the source with the build beside it, and the paper's files in a tree.",
+    "hold": 2.2,
+    "pointer": {
+      "at": [
+        440.0,
+        780
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Open a section from the tree. Standard or emacs keys, and the spelling checked.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        415.1,
+        729.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Open a section from the tree. Standard or emacs keys, and the spelling checked.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        352.8,
+        601.9
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Open a section from the tree. Standard or emacs keys, and the spelling checked.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        271.8,
+        436.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Open a section from the tree. Standard or emacs keys, and the spelling checked.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        190.7,
+        271.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Open a section from the tree. Standard or emacs keys, and the spelling checked.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        128.4,
+        143.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "01.png",
+    "caption": "Open a section from the tree. Standard or emacs keys, and the spelling checked.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        103.5,
+        92.9
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "02.png",
+    "caption": "Open a section from the tree. Standard or emacs keys, and the spelling checked.",
+    "hold": 1.8,
+    "pointer": {
+      "at": [
+        103.5,
+        92.9
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "03.png",
+    "caption": "Edit the line the note was about.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        125.8,
+        104.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "03.png",
+    "caption": "Edit the line the note was about.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        181.7,
+        132.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "03.png",
+    "caption": "Edit the line the note was about.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        254.2,
+        168.3
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "03.png",
+    "caption": "Edit the line the note was about.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        326.8,
+        204.7
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "03.png",
+    "caption": "Edit the line the note was about.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        382.7,
+        232.6
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "03.png",
+    "caption": "Edit the line the note was about.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        405.0,
+        243.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "04.png",
+    "caption": "Edit the line the note was about.",
+    "hold": 0.5,
+    "pointer": {
+      "at": [
+        405.0,
+        243.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Edit the line the note was about.",
+    "hold": 0.5,
+    "pointer": {
+      "at": [
+        405.0,
+        243.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Edit the line the note was about.",
+    "hold": 1.4,
+    "pointer": {
+      "at": [
+        405.0,
+        243.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Build: latexmk into paperpen's cache, and the pages redraw beside you.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        400.8,
+        227.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Build: latexmk into paperpen's cache, and the pages redraw beside you.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        390.1,
+        185.6
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Build: latexmk into paperpen's cache, and the pages redraw beside you.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        376.3,
+        131.6
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "06.png",
+    "caption": "Build: latexmk into paperpen's cache, and the pages redraw beside you.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        362.5,
+        77.6
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "06.png",
+    "caption": "Build: latexmk into paperpen's cache, and the pages redraw beside you.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        351.9,
+        36.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "07.png",
+    "caption": "Build: latexmk into paperpen's cache, and the pages redraw beside you.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        347.7,
+        19.4
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "08.png",
+    "caption": "Build: latexmk into paperpen's cache, and the pages redraw beside you.",
+    "hold": 2.2,
+    "pointer": {
+      "at": [
+        347.7,
+        19.4
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "09.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        395.3,
+        23.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "09.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        509.0,
+        32.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "09.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        644.8,
+        42.6
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "10.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        758.5,
+        51.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "11.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        806.1,
+        55.2
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "12.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        776.4,
+        69.2
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "12.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        702.1,
+        104.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "12.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        605.6,
+        149.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "12.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        509.0,
+        194.9
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "12.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        434.7,
+        229.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "12.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        405.0,
+        243.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "13.png",
+    "caption": "Double click a line and the build shows where it landed: SyncTeX, read forwards.",
+    "hold": 2.6,
+    "pointer": {
+      "at": [
+        405.0,
+        243.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "14.png",
+    "caption": "The paper beside its own past: the last commit as old, the working tree as new.",
+    "hold": 2.4,
+    "pointer": {
+      "at": [
+        330.0,
+        780
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "14.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        364.6,
+        747.2
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "14.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        454.0,
+        662.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "14.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        576.2,
+        546.7
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "14.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        709.3,
+        420.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "14.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        831.5,
+        304.7
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "14.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        920.9,
+        220.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "15.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        955.5,
+        187.2
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "16.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 1.2,
+    "pointer": {
+      "at": [
+        955.5,
+        187.2
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "16.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        955.3,
+        169.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "16.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        954.8,
+        128.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "16.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        954.3,
+        79.2
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "16.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        953.8,
+        37.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "17.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        953.6,
+        20.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "18.png",
+    "caption": "And latexdiff between them, compiled, with what changed marked up.",
+    "hold": 3.2,
+    "pointer": {
+      "at": [
+        953.6,
+        20.5
+      ],
+      "kind": "mouse"
+    }
+  }
+]

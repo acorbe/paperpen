@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>The tablet, over the network · paperpen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Serving the reader to a tablet: the login, certificate, QR code.">
+<link rel="stylesheet" href="manual.css">
+<header class="top">
+  <a class="mark" href="index.html">paperpen</a>
+  <nav><a href="index.html">What it is</a>
+    <a href="reading.html">Reading a paper</a>
+    <a href="writing.html">Writing it back</a>
+    <a href="network.html" class="here">The tablet, over the network</a>
+    <a href="agents.html">Working the queue</a>
+    <a href="commands.html">Every command</a></nav>
+</header>
+<main>
+<h1>The tablet, over the network</h1>
+<p class="lede">The reader is worth having on the tablet, which means the
+server has to leave the machine it runs on. That is one flag, and it is closed
+behind a login unless you choose otherwise.</p>
+
+<pre><code>paperpen onboard             # the login, the certificate and a first paper, once
+paperpen lan                 # choose the login again
+paperpen tls                 # a certificate for this machine
+paperpen serve --lan         # every interface, over https, behind the login</code></pre>
+
+<p><code>serve --lan</code> prints what the tablet needs:</p>
+<pre><code>shelf    https://127.0.0.1:8770/
+network  https://192.0.2.17:8770/   password and six digits to get in
+tls      ~/.config/paperpen/tls/cert.pem
+         AD:B0:30:1C:3D:8D:E0:B3:03:1A:D7:6B:2A:AF:8E:66:…
+
+    █▀▀▀▀▀█ ▀▄ ▀▀█▄▀▀▄▀▀█ █▀▀▀▀▀█
+    █ ███ █ █▀▀ ▀▄ ▄ ▀ █▄ █ ███ █
+    █ ▀▀▀ █ ▄█▀ ▄█  ▀██▄▀ █ ▀▀▀ █
+    …
+    https://192.0.2.17:8770/</code></pre>
+<p>The QR code is there because an address like that is otherwise typed on
+glass. <code>paperpen qr</code> shows it again on its own.</p>
+
+<h2>The login</h2>
+<p>Onboarding and <code>paperpen lan</code> ask how the reader on the network
+lets people in:</p>
+<ol>
+  <li><b>A password and six digits from an authenticator app.</b> Recommended,
+  and the default.</li>
+  <li><b>A password only.</b></li>
+  <li><b>No login.</b> Anyone who can reach the address can read your papers
+  and notes, change their sources and download all of it. Fair at home, on a
+  network that is yours; wrong on conference or campus wifi. It is confirmed
+  by typing <code>no login</code>, and <code>serve --lan</code> warns about it
+  every time it starts. <code>paperpen lan --no-login</code> chooses it
+  directly, and <code>paperpen lan</code> turns a login back on.</li>
+</ol>
+<p>Nothing is ever served to the network unlocked by default: until one of the
+three is chosen, <code>serve --lan</code> asks.</p>
+<ul>
+  <li>The password is hashed with scrypt and kept in
+  <code>~/.config/paperpen/auth.json</code>, mode 600, and deliberately not
+  <code>papers.json</code>, which is the file meant to be handed around.</li>
+  <li><code>paperpen lan</code> offers a second factor: a standard TOTP secret
+  any authenticator app will take, shown as a QR code to scan.</li>
+  <li>A wrong password and a wrong code give the same answer, and a failure
+  costs a second.</li>
+  <li>Whatever the login, the server refuses a write sent by another site's
+  page, and on loopback answers only to its own name, because any page open in
+  your browser can send requests to this machine.</li>
+</ul>
+
+<h2>The certificate</h2>
+<p><code>paperpen tls</code> makes a self-signed certificate for this machine
+and prints its fingerprint and both honest ways to use it:</p>
+<ul>
+  <li><b>Install it on the tablet</b> (the file is
+  <code>~/.config/paperpen/tls/cert.pem</code>) and the browser stops
+  complaining. On iOS that is Settings → General → VPN &amp; Device Management,
+  then Certificate Trust Settings.</li>
+  <li><b>Or accept the warning once</b>, after checking the fingerprint against
+  what the terminal printed. That is a real check, not a formality: it is what
+  the warning is asking you to do.</li>
+</ul>
+<div class="note warn"><b>The address is in the certificate, as an address.</b>
+A certificate naming only a hostname has not been accepted by a browser since
+2017, so the LAN address goes in as an IP subject alternative name. If the
+machine's address changes, <code>serve --lan</code> says so and
+<code>paperpen tls --renew</code> makes a new one. The certificate is good for
+397 days, because Apple refuses anything longer.</div>
+
+<h2>Taking the state with you</h2>
+<p>The rounds are the one thing here that cannot be made again, and the tablet
+has no terminal. <b>take the state</b> in the shelf header is the whole of it
+as one file:</p>
+<pre><code>paperpen bundle                  # everything: the registry and every round
+paperpen bundle my-manuscript    # one paper, with its manifest
+paperpen bundle --ink            # include the rendered handwriting</code></pre>
+<p>The same two are <code>/state.tar.gz</code> and
+<code>/paper/&lt;id&gt;/state.tar.gz</code> in a browser. The rendered ink is
+left out by default: it comes back from the strokes and is most of the
+bytes.</p>
+
+<h2>A paper that carries its own history</h2>
+<p>With <code>record: repo</code>, a finished round leaves a manifest beside
+itself in the paper's repository:</p>
+<pre><code>&lt;paper&gt;/review/
+  paperpen.json          which paper this is, how it is read, which rounds exist
+  2026-04-02/            NOTES.md, notes.json, ink/</code></pre>
+<p>That is enough to rebuild the shelf entry from a clone, which is what
+<code>adopt</code> does, so a paper can move between machines, or be picked up
+by whoever has the repository:</p>
+<pre><code>paperpen adopt git@example.org:group/manuscript.git
+paperpen adopt ~/papers/manuscript
+paperpen sync                    # pull every paper's repo, re-read the rounds</code></pre>
+<div class="next"><a href="writing.html">&larr; Writing it back</a><a href="agents.html">Working the queue &rarr;</a></div>
+</main>
+<footer>
+  Read a paper on a tablet, mark it up with a pen, get the marks back where the
+  paper is written. · <a href="index.html">the manual</a> ·
+  by <a href="https://github.com/acorbe">acorbe</a>
+</footer>
+</html>

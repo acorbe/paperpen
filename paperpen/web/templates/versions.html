@@ -1,0 +1,1216 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>{{ name }}: versions · paperpen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="/favicon.svg">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #eef1f5; --paper: #ffffff; --ink: #172b4d; --muted: #5e6c84;
+    --bar: #dfe3ea; --accent: #0079bf; --line: #8883;
+    --old: #6554c0; --new: #36b37e; --diff: #d9822b;
+    --add: #1f7a4d; --del: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12151b; --paper: #262c38; --ink: #e6e9ef; --muted: #9aa3b2; --bar: #1c212b;
+            --add: #57d9a3; --del: #ff8f73; }
+  }
+  * { box-sizing: border-box; }
+  /* scrolling is the browser's, pinching is not: a pinch zooms the page
+     being read (see pinchZoom), never the whole view with its bars */
+  html, body { margin: 0; height: 100%; touch-action: pan-x pan-y; }
+  body {
+    background: var(--bg); color: var(--ink); height: 100vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  button {
+    font: inherit; font-size: .72rem; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--line); border-radius: 5px; padding: .2rem .5rem;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button svg { vertical-align: -3px; }
+  button svg + span { margin-left: .25rem; }
+  button[disabled] { opacity: .5; cursor: default; }
+
+  header {
+    display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+    padding: .55rem .8rem; background: var(--bar); flex: 0 0 auto;
+  }
+  header h1 { font-size: .85rem; margin: 0; font-weight: 600; }
+  header a { color: var(--muted); font-size: .75rem; text-decoration: none; }
+  header a:hover { color: var(--accent); }
+  header .grow { flex: 1 1 auto; }
+  .group { display: flex; align-items: center; gap: .3rem; }
+  .group .label { font-size: .65rem; color: var(--muted); text-transform: uppercase;
+                  letter-spacing: .06em; }
+  #where { font-size: .72rem; color: var(--muted); font-family: ui-monospace, monospace;
+           min-width: 5.5rem; text-align: center; }
+
+  main {
+    flex: 1 1 auto; min-height: 0; display: grid; gap: 1px; background: var(--line);
+    grid-template-columns: minmax(230px, 20%) repeat(3, 1fr);
+  }
+  /* min-height: 0 on both, or a grid item takes its content's height as its
+     minimum and the pane grows past the viewport instead of scrolling. */
+  .pane { background: var(--bg); min-width: 0; min-height: 0;
+          display: flex; flex-direction: column; }
+  .phead {
+    display: flex; align-items: center; gap: .4rem; padding: .35rem .5rem;
+    background: var(--bar); border-bottom: 2px solid var(--edge, var(--line));
+    flex: 0 0 auto; min-height: 2.1rem;
+  }
+  #pane-old { --edge: var(--old); }
+  #pane-new { --edge: var(--new); }
+  #pane-diff { --edge: var(--diff); }
+  .tag {
+    font-size: .6rem; text-transform: uppercase; letter-spacing: .07em;
+    color: #fff; background: var(--edge, var(--muted)); padding: .1rem .35rem;
+    border-radius: 4px; flex: 0 0 auto;
+  }
+  .what { font-size: .72rem; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+          white-space: nowrap; }
+  .what b { font-family: ui-monospace, monospace; font-weight: 600; }
+  .phead .grow { flex: 1 1 auto; }
+  .said { font-size: .65rem; color: var(--muted); white-space: nowrap; }
+  .said.stale { color: var(--diff); }
+
+  .body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: .6rem; }
+  /* pan-y: vertical scrolling stays the browser's, and a sideways stroke
+     comes to the page and turns it (see gestures). Zoomed in past the pane's
+     width, sideways is a pan again. A pinch is the page's (see pinchZoom). */
+  .body { touch-action: pan-y; }
+  .body.wide { touch-action: pan-x pan-y; }
+  .leaf { position: relative; margin: 0 auto; width: var(--zoom, 100%);
+          transition: transform .18s ease-out; }
+  .leaf.moving { transition: none; }
+  .leaf img { display: block; width: 100%;
+              background: var(--paper); box-shadow: 0 1px 6px rgba(9,30,66,.25); }
+
+  /* the notes of the open round, on the new pane when it is the reader's build */
+  .band { position: absolute; pointer-events: none; border-radius: 2px;
+          background: color-mix(in srgb, var(--accent) 16%, transparent);
+          box-shadow: inset 0 -1.5px 0 color-mix(in srgb, var(--accent) 65%, transparent); }
+  .band.sel { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .pin { position: absolute; transform: translate(4px, -50%); min-width: 1.35rem;
+         height: 1.35rem; padding: 0 .25rem; border-radius: 999px; border: 0;
+         background: var(--accent); color: #fff; font-size: .62rem; font-weight: 700; }
+  .pin:hover { color: #fff; }
+  #pane-new.noting .phead, #pane-diff.noting .phead { border-bottom-color: var(--accent); }
+  .said.can-note { color: var(--accent); }
+
+  #toast { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%);
+           background: #172b4d; color: #fff; padding: .45rem .9rem; border-radius: 999px;
+           font-size: .78rem; z-index: 40; max-width: 92vw; text-align: center; }
+
+  /* a note, written on the version view: the same fields as the reader's */
+  #note {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--paper);
+    border-radius: 14px 14px 0 0; box-shadow: 0 -2px 20px rgba(9,30,66,.35);
+    padding: .8rem .9rem calc(.9rem + env(safe-area-inset-bottom));
+    max-height: 82vh; overflow: auto; max-width: 760px; margin: 0 auto;
+  }
+  #note .top { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+  #note .top strong { font-size: .85rem; }
+  #note .top .grow { flex: 1 1 auto; }
+  #note-where { font-size: .7rem; color: var(--muted); font-family: ui-monospace, monospace; }
+  #note-quote { font-size: .78rem; color: var(--muted); border-left: 3px solid #8884;
+                padding: .2rem .6rem; margin: 0 0 .6rem; max-height: 6.5rem; overflow: auto; }
+  #note-tags { display: flex; gap: .3rem; flex-wrap: wrap; margin-bottom: .5rem; }
+  #note-text { width: 100%; min-height: 4.5rem; border: 1px solid #8883; border-radius: 8px;
+               padding: .5rem .6rem; font: inherit; font-size: .9rem; background: var(--bg);
+               color: var(--ink); }
+  #note-hand { display: block; width: 100%; height: 170px; margin: .5rem 0 .3rem;
+               background: var(--bg); border: 1px solid #8883; border-radius: 8px;
+               touch-action: none; cursor: crosshair; }
+  #note-hand.erasing { cursor: cell; }
+  #note .row2 { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
+  #note .row2 .grow { flex: 1 1 auto; }
+  #note .hint { font-size: .68rem; color: var(--muted); }
+  #note button { font-size: .8rem; padding: .35rem .75rem; border-radius: 7px; }
+  #note .save { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .empty { padding: 1.6rem .8rem; text-align: center; color: var(--muted); font-size: .78rem;
+           line-height: 1.5; }
+  .empty button { margin-top: .7rem; }
+  .err { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: .66rem;
+         color: var(--del); padding: .6rem; margin: 0; }
+
+  /* the log */
+  #tree .body { padding: 0; }
+  .row {
+    display: block; width: 100%; text-align: left; border: 0; border-radius: 0;
+    border-bottom: 1px solid var(--line); background: none; padding: .4rem .5rem;
+    font-size: .72rem; line-height: 1.35; cursor: pointer;
+  }
+  .row:hover { background: var(--paper); color: inherit; }
+  .row .top { display: flex; gap: .35rem; align-items: baseline; }
+  .row .sha { font-family: ui-monospace, monospace; color: var(--accent); }
+  .row .when { color: var(--muted); font-size: .66rem; }
+  .row .who { color: var(--muted); font-size: .66rem; margin-left: auto; }
+  .row .subject { display: block; overflow: hidden; text-overflow: ellipsis;
+                  white-space: nowrap; }
+  .row .marks { display: flex; gap: .25rem; margin-top: .15rem; }
+  .mark { font-size: .55rem; text-transform: uppercase; letter-spacing: .05em;
+          color: var(--muted); border: 1px solid var(--line); border-radius: 3px;
+          padding: 0 .25rem; }
+  .row.is-old { box-shadow: inset 3px 0 0 var(--old); }
+  .row.is-new { box-shadow: inset 3px 0 0 var(--new); }
+  .row.is-old.is-new { box-shadow: inset 3px 0 0 var(--old), inset -3px 0 0 var(--new); }
+  .row .pick { display: flex; gap: .25rem; margin-top: .25rem; }
+  .row .pick span {
+    font-size: .58rem; border: 1px solid var(--line); border-radius: 3px;
+    padding: 0 .3rem; color: var(--muted);
+  }
+  .row .pick span:hover { border-color: var(--accent); color: var(--accent); }
+  .row.head { background: var(--paper); }
+
+  /* the source diff */
+  pre.patch { margin: 0; font-family: ui-monospace, monospace; font-size: .68rem;
+              line-height: 1.4; white-space: pre; }
+  pre.patch .a { color: var(--add); }
+  pre.patch .d { color: var(--del); }
+  pre.patch .h { color: var(--accent); }
+  pre.patch .f { color: var(--ink); font-weight: 600; }
+  .stat { font-family: ui-monospace, monospace; font-size: .68rem; color: var(--muted);
+          white-space: pre; border-bottom: 1px solid var(--line); padding-bottom: .5rem;
+          margin-bottom: .5rem; }
+
+  #tabs { display: none; gap: .3rem; padding: .4rem .8rem; background: var(--bar);
+          border-top: 1px solid var(--line); }
+  @media (max-width: 1000px) {
+    main { grid-template-columns: 1fr; }
+    #tabs { display: flex; }
+    body[data-only="tree"] .pane:not(#tree),
+    body[data-only="old"]  .pane:not(#pane-old),
+    body[data-only="new"]  .pane:not(#pane-new),
+    body[data-only="diff"] .pane:not(#pane-diff) { display: none; }
+  }
+  /* A tablet held upright: four panes side by side are four slivers, and one
+     at a time loses the point of the view. Two by two instead, the log beside
+     the diff on top and the two builds under them, which is how the question
+     is asked: what changed, and then what it looks like either side. Only
+     from 600px, so a phone upright keeps the tabs. */
+  @media (orientation: portrait) and (min-width: 600px) {
+    main { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+           grid-template-areas: "tree diff" "new old"; }
+    #tree { grid-area: tree; }
+    #pane-diff { grid-area: diff; }
+    #pane-new { grid-area: new; }
+    #pane-old { grid-area: old; }
+    main > .pane { display: flex !important; }
+    #tabs { display: none; }
+  }
+  .find-list { font: inherit; font-size: .78rem; border: 1px solid var(--line); border-radius: 999px;
+               padding: .28rem .8rem; background: var(--paper); color: var(--ink); min-width: 0;
+               flex: 0 1 16rem; }
+</style>
+
+<header>
+  <a href="/paper/{{ pid }}" title="Back to the reader">&larr;</a>
+  <h1>{{ name }}</h1>
+  <span class="grow"></span>
+  <span class="group">
+    <span class="label">page</span>
+    <button id="prev" type="button">&minus;</button>
+    <span id="where">1</span>
+    <button id="next" type="button">+</button>
+  </span>
+  <span class="group">
+    <span class="label">zoom</span>
+    <button id="out" type="button" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5M8 10.5h5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+    <button id="fit" type="button">fit</button>
+    <button id="in" type="button" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5M8 10.5h5M10.5 8v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+  </span>
+  <span class="group">
+    <button id="lock" class="on" type="button" title="Scroll the three panes together">locked</button>
+  </span>
+  <a href="/">the shelf</a>
+</header>
+
+<main>
+  <section class="pane" id="tree">
+    <div class="phead">
+      <span class="tag" style="--edge: var(--muted)">log</span>
+      <span class="what" title="{{ repo }}">{{ repo.split('/')[-1] }}</span>
+      <span class="grow"></span>
+      <input class="find-list" id="find-commit" type="search" autocomplete="off"
+             placeholder="find (/)" title="a commit by its message, its author or its hash">
+      <button id="only-source" class="on" type="button"
+              title="Hide commits that did not touch .tex or .bib">source only</button>
+    </div>
+    <div class="body" id="log"><div class="empty">reading the log…</div></div>
+  </section>
+
+  <section class="pane" id="pane-old">
+    <div class="phead">
+      <span class="tag">old</span>
+      <span class="what" id="what-old">pick a commit</span>
+      <span class="grow"></span>
+      <span class="said" id="said-old"></span>
+      <button class="again" id="again-old" type="button" hidden>rebuild</button>
+    </div>
+    <div class="body" id="body-old"><div class="empty">Pick a commit on the left.</div></div>
+  </section>
+
+  <section class="pane" id="pane-new">
+    <div class="phead">
+      <span class="tag">new</span>
+      <span class="what" id="what-new">the working tree</span>
+      <span class="grow"></span>
+      <span class="said" id="said-new"></span>
+      <button class="again" id="again-new" type="button" hidden>rebuild</button>
+    </div>
+    <div class="body" id="body-new"><div class="empty">…</div></div>
+  </section>
+
+  <section class="pane" id="pane-diff">
+    <div class="phead">
+      <span class="tag">diff</span>
+      <span class="what" id="what-diff">old → new</span>
+      <span class="grow"></span>
+      <span class="said" id="said-diff"></span>
+      <button class="again" id="again-diff" type="button" hidden>rebuild</button>
+      <button id="as-pdf" class="on" type="button" title="latexdiff, compiled">marked up</button>
+      <button id="as-source" type="button" title="git diff over the .tex">source</button>
+    </div>
+    <div class="body" id="body-diff"><div class="empty">…</div></div>
+  </section>
+</main>
+
+<div id="note" hidden>
+  <div class="top">
+    <strong id="note-title">New note</strong>
+    <span id="note-where"></span>
+    <span class="grow"></span>
+    <button id="note-x" type="button" title="Close">&times;</button>
+  </div>
+  <blockquote id="note-quote"></blockquote>
+  <div id="note-tags">
+    <button type="button" data-tag="AUTO" class="on">auto</button>
+    <button type="button" data-tag="SCIENCE">science</button>
+    <button type="button" data-tag="LANGUAGE">language</button>
+    <button type="button" data-tag="QUESTION">question</button>
+    <button type="button" data-tag="TODO">todo</button>
+  </div>
+  <textarea id="note-text" placeholder="What should change here. Type it, or write it with the pen below."></textarea>
+  <canvas id="note-hand"></canvas>
+  <div class="row2" id="note-pen">
+    <button type="button" id="hand-write" class="on" title="Write"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 17.3V21h3.7L17.6 10.1l-3.7-3.7L3 17.3zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.7 3.7L20.7 7z" fill="currentColor"/></svg><span>pen</span></button>
+    <button type="button" id="hand-rub" title="Rub out"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M16.2 3.5a2 2 0 0 0-2.8 0L3.5 13.4a2 2 0 0 0 0 2.8l4.3 4.3H14l6.5-6.5a2 2 0 0 0 0-2.8l-4.3-7.7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.4 7.6 16.4 14.6" stroke="currentColor" stroke-width="1.8"/><path d="M8 21h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>rub</span></button>
+    <button type="button" id="hand-undo" title="Take back the last stroke or rub-out"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 7H15a5 5 0 0 1 0 10H8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 4 8.5 7 12 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>undo</span></button>
+    <button type="button" id="hand-clear" title="Clear the handwriting; undo brings it back"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span>clear</span></button>
+    <span class="hint" id="note-hint">the pen writes here; a finger does not</span>
+    <span class="grow"></span>
+    <a id="note-reader" href="/paper/{{ pid }}" hidden>change it in the reader</a>
+    <button type="button" id="note-cancel">Close</button>
+    <button type="button" class="save" id="note-save">Save</button>
+  </div>
+</div>
+
+<div id="toast" hidden></div>
+
+<div id="tabs">
+  <button data-only="tree" type="button">log</button>
+  <button data-only="old" class="on" type="button">old</button>
+  <button data-only="new" type="button">new</button>
+  <button data-only="diff" type="button">diff</button>
+</div>
+
+<script src="/orderless.js"></script>
+<script>
+const PID = {{ pid|tojson }};
+const IS_PDF = {{ is_pdf|tojson }};
+const HAS_GIT = {{ git|tojson }};
+
+// Three panes of the same paper, at the same page. `old` and `new` are refs
+// the way git spells them, 'work' being the tree as it is on disk; the diff
+// pane's ref is the pair, which is how the server names a latexdiff build.
+const view = {
+  old: null, new: 'work', page: 1, zoom: 0, lock: true, mode: 'pdf',
+  pages: {old: 0, new: 0, diff: 0}, sizes: {}, source: true, rows: [],
+};
+const PANES = ['old', 'new', 'diff'];
+const el = id => document.getElementById(id);
+
+function refOf(which) {
+  if (which === 'old') return view.old;
+  if (which === 'new') return view.new;
+  return view.old ? view.old + '..' + (view.new === 'work' ? 'work' : view.new) : null;
+}
+
+function escaped(text) {
+  const box = document.createElement('div');
+  box.textContent = text == null ? '' : text;
+  return box.innerHTML;
+}
+
+async function ask(url, options) {
+  const answer = await fetch(url, options);
+  let data = {};
+  try { data = await answer.json(); } catch (e) { data = {}; }
+  if (!answer.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + answer.status));
+  return data;
+}
+
+// --- the log ---------------------------------------------------------------
+
+function drawLog() {
+  const box = el('log');
+  box.innerHTML = '';
+  const pieces = Orderless.parse(el('find-commit').value);
+  const rows = (view.source ? view.rows.filter(r => r.source || r.working) : view.rows)
+    .filter(r => !pieces.length || Orderless.matches(pieces,
+      [r.subject, r.short, r.sha, r.who, r.date].join(' ')));
+  if (!rows.length) { box.innerHTML = '<div class="empty">no commits</div>'; return; }
+  for (const row of rows) {
+    const button = document.createElement('button');
+    button.className = 'row' + (row.working ? ' head' : '');
+    button.dataset.ref = row.ref;
+    const marks = [];
+    if (row.working && row.dirty) marks.push('uncommitted');
+    if (row.round) marks.push('a round of ours');
+    if (row.built) marks.push('what the reader shows');
+    button.innerHTML =
+      '<span class="top"><span class="sha">' + escaped(row.short || 'work') + '</span>'
+      + '<span class="when">' + escaped(row.date || '') + '</span>'
+      + '<span class="who">' + escaped(row.who || '') + '</span></span>'
+      + '<span class="subject">' + escaped(row.subject) + '</span>'
+      + (marks.length ? '<span class="marks">' + marks.map(m => '<span class="mark">' + m + '</span>').join('') + '</span>' : '')
+      + '<span class="pick"><span data-side="old">as old</span><span data-side="new">as new</span></span>';
+    button.onclick = event => {
+      const side = event.target.dataset ? event.target.dataset.side : null;
+      choose(side || 'old', row.ref);
+    };
+    if (row.ref === view.old) button.classList.add('is-old');
+    if (row.ref === view.new) button.classList.add('is-new');
+    box.appendChild(button);
+  }
+}
+
+function choose(side, ref) {
+  if (side === 'old' && ref === view.new && view.rows.length > 1) {
+    // the same commit on both sides shows nothing; put the other side back
+    // on the working tree rather than silently drawing an empty diff
+    view.new = 'work';
+  }
+  view[side] = ref;
+  drawLog();
+  load(side);
+  load('diff');
+}
+
+async function readLog() {
+  if (!HAS_GIT) {
+    el('log').innerHTML = '<div class="empty">This paper has no git repository, '
+      + 'so there is no history to read it against.</div>';
+    return;
+  }
+  const data = await ask('/paper/' + PID + '/history');
+  view.rows = [Object.assign({ref: 'work', subject: 'the working tree', working: true,
+                              source: true}, data.working)]
+    .concat(data.commits.map(c => Object.assign({ref: c.sha}, c)));
+  // What just happened is the usual question: the newest commit that touched
+  // the text, against what is here now. With nothing uncommitted that diff is
+  // empty, so the one before it is the honest default.
+  const source = data.commits.filter(c => c.source);
+  if (!view.old && source.length) {
+    view.old = (data.working.dirty ? source[0] : (source[1] || source[0])).sha;
+  }
+  drawLog();
+  PANES.forEach(load);
+}
+
+// --- one pane --------------------------------------------------------------
+
+function paint(which, html) { el('body-' + which).innerHTML = html; }
+
+function heading(which, state) {
+  const what = el('what-' + which);
+  if (which === 'diff') {
+    what.textContent = state ? state.title : 'old → new';
+  } else if (state && state.kind === 'work') {
+    what.innerHTML = 'the working tree' + (state.dirty ? ' <b>(uncommitted changes)</b>' : '')
+      + (state.head ? ' at <b>' + escaped(state.head) + '</b>' : '');
+  } else if (state) {
+    what.innerHTML = '<b>' + escaped(state.short || state.title) + '</b> '
+      + escaped(state.date || '') + ' · ' + escaped(state.subject || '');
+  }
+  const said = el('said-' + which);
+  said.textContent = state && state.built
+    ? (state.pages + ' page' + (state.pages === 1 ? '' : 's')
+       + (state.stale ? ' · the paper has been edited since' : ''))
+    : '';
+  said.classList.toggle('stale', !!(state && state.stale));
+  el('again-' + which).hidden = !(state && state.built);
+}
+
+async function load(which) {
+  const ref = refOf(which);
+  if (!ref) { paint(which, '<div class="empty">Pick a commit on the left.</div>'); return; }
+  if (which === 'diff' && view.mode === 'source') return loadSource();
+  if (which === 'diff' && IS_PDF) {
+    paint(which, '<div class="empty">This paper is a PDF, so there is no source to '
+      + 'mark up. The two builds beside each other are the comparison.</div>');
+    return;
+  }
+  try {
+    const state = await ask('/paper/' + PID + '/version/' + encodeURIComponent(ref));
+    heading(which, state);
+    view.pages[which] = state.pages;
+    if (state.built) { show(which, state); showWhere(); }
+    else offer(which, state);
+  } catch (err) {
+    paint(which, '<pre class="err">' + escaped(err.message) + '</pre>');
+  }
+}
+
+function offer(which, state) {
+  const says = which === 'diff'
+    ? 'latexdiff marks up what changed between the two, and the result is compiled.'
+    : 'This version has not been compiled yet. It is built into paperpen’s cache; '
+      + 'nothing is written into the paper’s repository.';
+  paint(which, '<div class="empty">' + says + '<br><button type="button">compile '
+        + escaped(state.title) + '</button></div>');
+  el('body-' + which).querySelector('button').onclick = () => compile(which);
+  if (which === 'new') markNoting();
+}
+
+async function compile(which, again) {
+  if (which === 'diff') for (const k of Object.keys(DIFF_LAYOUT)) delete DIFF_LAYOUT[k];
+  const ref = refOf(which);
+  const started = Date.now();
+  paint(which, '<div class="empty">compiling… <span id="clock-' + which + '">0s</span>'
+        + '<br>latexmk settles the passes, so a real paper takes a minute.</div>');
+  const clock = setInterval(() => {
+    const tick = el('clock-' + which);
+    if (tick) tick.textContent = Math.round((Date.now() - started) / 1000) + 's';
+  }, 1000);
+  try {
+    const state = await ask('/paper/' + PID + '/version/' + encodeURIComponent(ref),
+                            {method: 'POST', headers: {'Content-Type': 'application/json'},
+                             body: JSON.stringify({force: !!again})});
+    heading(which, state);
+    view.pages[which] = state.pages;
+    show(which, state);
+    showWhere();
+  } catch (err) {
+    paint(which, '<pre class="err">' + escaped(err.message) + '</pre>');
+  } finally {
+    clearInterval(clock);
+  }
+}
+
+function show(which, state) {
+  const n = Math.min(view.page, state.pages || 1);
+  const ref = refOf(which);
+  const img = document.createElement('img');
+  img.loading = 'eager';
+  img.alt = 'page ' + n;
+  img.src = '/paper/' + PID + '/version/' + encodeURIComponent(ref) + '/page/' + n + '.png';
+  const leaf = document.createElement('div');
+  leaf.className = 'leaf';
+  leaf.dataset.page = n;
+  leaf.appendChild(img);
+  const body = el('body-' + which);
+  body.innerHTML = '';
+  if (state.pages && view.page > state.pages) {
+    const said = document.createElement('div');
+    said.className = 'empty';
+    said.style.padding = '.4rem';
+    said.textContent = 'this version stops at page ' + state.pages;
+    body.appendChild(said);
+  }
+  body.appendChild(leaf);
+  view.sizes[which] = state.sizes || [];
+  if (which === 'new' || which === 'diff') {
+    markNoting();
+    drawNotes();
+  }
+  applyZoom();
+}
+
+function showWhere() {
+  const most = Math.max(view.pages.old, view.pages.new, view.pages.diff, 1);
+  el('where').textContent = view.page + ' / ' + most;
+}
+
+// --- the source diff -------------------------------------------------------
+
+async function loadSource() {
+  if (!view.old) { paint('diff', '<div class="empty">Pick a commit on the left.</div>'); return; }
+  paint('diff', '<div class="empty">reading the diff…</div>');
+  try {
+    const data = await ask('/paper/' + PID + '/source-diff?old='
+                           + encodeURIComponent(view.old) + '&new=' + encodeURIComponent(view.new));
+    el('what-diff').textContent = data.old + ' → ' + data.new;
+    if (data.empty) {
+      paint('diff', '<div class="empty">Nothing changed in the source between these two.</div>');
+      return;
+    }
+    const lines = data.patch.split('\n').map(line => {
+      const kind = line.startsWith('+++') || line.startsWith('---') ? 'f'
+        : line.startsWith('+') ? 'a' : line.startsWith('-') ? 'd'
+        : line.startsWith('@@') ? 'h' : line.startsWith('diff ') ? 'f' : '';
+      return kind ? '<span class="' + kind + '">' + escaped(line) + '</span>' : escaped(line);
+    });
+    paint('diff', (data.stat ? '<div class="stat">' + escaped(data.stat) + '</div>' : '')
+          + '<pre class="patch">' + lines.join('\n')
+          + (data.cut ? '\n<span class="h">… cut: the rest is in the terminal</span>' : '')
+          + '</pre>');
+  } catch (err) {
+    paint('diff', '<pre class="err">' + escaped(err.message) + '</pre>');
+  }
+}
+
+// --- the page, the zoom, and keeping the three together --------------------
+
+function turn(by) {
+  const most = Math.max(view.pages.old, view.pages.new, view.pages.diff, 1);
+  const wanted = Math.min(Math.max(1, view.page + by), most);
+  if (wanted === view.page) return;
+  view.page = wanted;
+  showWhere();
+  PANES.forEach(which => { if (view.pages[which]) load(which); });
+}
+
+function applyZoom() {
+  requestAnimationFrame(() => PANES.forEach(p => {
+    const body = el('body-' + p);
+    body.classList.toggle('wide', body.scrollWidth > body.clientWidth + 2);
+  }));
+  const width = view.zoom ? (view.zoom * 100) + '%' : '100%';
+  document.querySelectorAll('.body .leaf').forEach(leaf => leaf.style.setProperty('--zoom', width));
+}
+
+let syncing = false;
+function follow(which) {
+  const body = el('body-' + which);
+  body.addEventListener('scroll', () => {
+    if (!view.lock || syncing) return;
+    syncing = true;
+    const reach = body.scrollHeight - body.clientHeight;
+    const part = reach > 0 ? body.scrollTop / reach : 0;
+    for (const other of PANES) {
+      if (other === which) continue;
+      const them = el('body-' + other);
+      const theirs = them.scrollHeight - them.clientHeight;
+      if (theirs > 0) them.scrollTop = part * theirs;
+    }
+    requestAnimationFrame(() => { syncing = false; });
+  }, {passive: true});
+}
+PANES.forEach(follow);
+
+// --- notes, on the new pane ------------------------------------------------
+//
+// A note is anchored to the build the reader shows: its page, its sentences,
+// the lines of source SyncTeX gives for them. The version called `work` is
+// that build and not a copy of it, so a note taken on it here is the note the
+// reader would have taken. Any other version is a different set of pages,
+// and a note put on one would land on whatever sits at the same spot now.
+
+let META = null;                      // the reader's build and the open round
+const LAYOUT = {};                    // page -> its sentences, as the reader has them
+let NOTE = null;                      // the note being written
+let toastTimer = null;
+
+function toast(text, ms) {
+  const box = el('toast');
+  box.textContent = text;
+  box.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { box.hidden = true; }, ms || 2600);
+}
+
+function canNote() { return view.new === 'work' && view.pages.new > 0; }
+
+// The diff can be noted on when its new side is the working tree: what it
+// shows is then that build's text with the old put back in, and a sentence
+// picked on it can be found again in the build the note belongs to.
+function canNoteDiff() {
+  return view.new === 'work' && !!view.old && view.mode === 'pdf' && !IS_PDF
+    && view.pages.diff > 0;
+}
+
+function markNoting() {
+  for (const [which, on] of [['new', canNote()], ['diff', canNoteDiff()]]) {
+    el('pane-' + which).classList.toggle('noting', on);
+    const said = el('said-' + which);
+    said.classList.toggle('can-note', on);
+    if (on && !said.textContent.includes('to note')) {
+      said.textContent += (said.textContent ? ' · ' : '') + 'tap twice to note';
+    } else if (!on) {
+      said.textContent = said.textContent.replace(/( · )?tap twice to note/, '');
+    }
+  }
+}
+
+async function readMeta() {
+  try { META = await ask('/paper/' + PID + '/meta'); } catch (err) { META = null; }
+  drawNotes();
+}
+
+async function layoutOf(n) {
+  if (!LAYOUT[n]) LAYOUT[n] = await ask('/paper/' + PID + '/layout/' + n);
+  return LAYOUT[n];
+}
+
+function pageSize(n, which) {
+  const sizes = view.sizes[which || 'new'] || [];
+  return sizes[n - 1] || [595.28, 841.89];
+}
+
+function drawNotes() {
+  const leaf = el('body-new').querySelector('.leaf');
+  if (!leaf) { drawDiffPick(); return; }
+  for (const old of leaf.querySelectorAll('.band, .pin')) old.remove();
+  if (!canNote()) { drawDiffPick(); return; }
+  const n = Number(leaf.dataset.page);
+  const [w, h] = pageSize(n);
+  const pc = (v, total) => (100 * v / total) + '%';
+  const band = (r, cls) => {
+    const b = document.createElement('div');
+    b.className = 'band' + (cls ? ' ' + cls : '');
+    b.style.left = pc(r[0], w); b.style.top = pc(r[1], h);
+    b.style.width = pc(Math.max(r[2] - r[0], 3), w);
+    b.style.height = pc(Math.max(r[3] - r[1], 3), h);
+    leaf.appendChild(b);
+  };
+  const open = (META && META.open) || [];
+  open.forEach((note, i) => {
+    if (note.page !== n) return;
+    const rects = note.rects && note.rects.length ? note.rects : [note.rect];
+    rects.forEach(r => band(r));
+    const pin = document.createElement('button');
+    pin.type = 'button';
+    pin.className = 'pin';
+    pin.textContent = i + 1;
+    pin.title = (note.note || 'handwritten').slice(0, 120);
+    pin.style.left = pc(note.rect[2], w);
+    pin.style.top = pc((note.rect[1] + note.rect[3]) / 2, h);
+    pin.onclick = event => { event.stopPropagation(); openNote(note); };
+    leaf.appendChild(pin);
+  });
+  if (NOTE && !NOTE.id && NOTE.page === n) NOTE.rects.forEach(r => band(r, 'sel'));
+  drawDiffPick();
+}
+
+function drawDiffPick() {
+  const leaf = el('body-diff').querySelector('.leaf');
+  if (!leaf) return;
+  for (const old of leaf.querySelectorAll('.band')) old.remove();
+  if (!NOTE || NOTE.id || !NOTE.diffRects || Number(leaf.dataset.page) !== NOTE.diffPage) return;
+  const [w, h] = pageSize(NOTE.diffPage, 'diff');
+  const pc = (v, total) => (100 * v / total) + '%';
+  for (const r of NOTE.diffRects) {
+    const b = document.createElement('div');
+    b.className = 'band sel';
+    b.style.left = pc(r[0], w); b.style.top = pc(r[1], h);
+    b.style.width = pc(Math.max(r[2] - r[0], 3), w);
+    b.style.height = pc(Math.max(r[3] - r[1], 3), h);
+    leaf.appendChild(b);
+  }
+}
+
+// What is under the finger: the sentence it is on, or failing that a patch of
+// page the note is about on its own.
+let lastPick = 0;
+
+async function pick(which, clientX, clientY) {
+  // a double tap can arrive twice, as taps and as the browser's own dblclick
+  if (Date.now() - lastPick < 600) return;
+  lastPick = Date.now();
+  if (which === 'diff' && canNoteDiff()) return pickOnDiff(clientX, clientY);
+  if (which !== 'new' || !canNote()) {
+    toast(view.new === 'work'
+      ? 'Notes go on the new version, or on the diff with it'
+      : 'Notes go on the working tree only: put it on the new side to write one', 3600);
+    return;
+  }
+  const leaf = el('body-new').querySelector('.leaf');
+  const img = leaf && leaf.querySelector('img');
+  if (!img) return;
+  const n = Number(leaf.dataset.page);
+  const box = img.getBoundingClientRect();
+  const [w, h] = pageSize(n);
+  const x = (clientX - box.left) / box.width * w, y = (clientY - box.top) / box.height * h;
+  if (x < 0 || y < 0 || x > w || y > h) return;
+  let found = null;
+  try {
+    const layout = await layoutOf(n);
+    found = (layout.sentences || []).find(s => s.rects.some(
+      r => x >= r[0] - 2 && x <= r[2] + 2 && y >= r[1] - 2 && y <= r[3] + 2));
+  } catch (err) { /* no layout: the patch of page will do */ }
+  if (found) {
+    openNote({page: n, kind: 'sentence', rects: found.rects, rect: [0, 0, 0, 0],
+              anchor: found.text, tag: 'AUTO'});
+  } else {
+    const r = [x - 12, y - 8, x + 12, y + 8];
+    openNote({page: n, kind: 'region', rects: [r], rect: r, anchor: '', tag: 'AUTO'});
+  }
+}
+
+// The sentence under the finger on the diff, found in the reader's build by
+// its words. Deleted text is in the diff and not in the build, and a sentence
+// that is nothing but deleted text has nowhere to go: the server says so.
+const DIFF_LAYOUT = {};
+
+async function pickOnDiff(clientX, clientY) {
+  const leaf = el('body-diff').querySelector('.leaf');
+  const img = leaf && leaf.querySelector('img');
+  if (!img) return;
+  const n = Number(leaf.dataset.page);
+  const ref = refOf('diff');
+  const box = img.getBoundingClientRect();
+  const [w, h] = pageSize(n, 'diff');
+  const x = (clientX - box.left) / box.width * w, y = (clientY - box.top) / box.height * h;
+  let found = null;
+  try {
+    const key = ref + '/' + n;
+    if (!DIFF_LAYOUT[key]) {
+      DIFF_LAYOUT[key] = await ask('/paper/' + PID + '/version/' + encodeURIComponent(ref)
+                                   + '/layout/' + n);
+    }
+    found = (DIFF_LAYOUT[key].sentences || []).find(s => s.rects.some(
+      r => x >= r[0] - 2 && x <= r[2] + 2 && y >= r[1] - 2 && y <= r[3] + 2));
+  } catch (err) {
+    toast('Could not read the diff’s page: ' + err.message, 4000);
+    return;
+  }
+  // the word under the finger, or the nearest on its line, and a few either
+  // side of it in reading order: what is looked for in the new version
+  const words = DIFF_LAYOUT[ref + '/' + n].words || [];
+  let at = -1, gap = 1e9;
+  words.forEach((word, i) => {
+    const r = word.r;
+    if (y < r[1] - 3 || y > r[3] + 3) return;
+    const d = x < r[0] ? r[0] - x : x > r[2] ? x - r[2] : 0;
+    if (d < gap) { gap = d; at = i; }
+  });
+  if (at < 0 || gap > 24) { toast('Tap twice on the text of the diff to note it'); return; }
+  const from = Math.max(0, at - 7);
+  const near = words.slice(from, at + 8).map(word => word.t);
+  try {
+    const got = await ask('/paper/' + PID + '/match', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({words: near, center: at - from, page: n})});
+    openNote({page: got.page, kind: 'sentence', rects: got.rects, rect: [0, 0, 0, 0],
+              anchor: got.text, tag: 'AUTO', diffPage: n,
+              diffRects: found ? found.rects : [words[at].r]});
+    el('note-where').textContent = 'page ' + got.page + ' of the new version, found from the diff';
+  } catch (err) {
+    toast(err.message, 5000);
+  }
+}
+
+// --- the note's own pad ----------------------------------------------------
+
+const hand = {strokes: [], undo: [], now: null, rubbing: false, rubbed: false, mode: 'write'};
+const handCanvas = el('note-hand');
+const RUB = 16;
+
+function drawHand() {
+  const box = handCanvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  handCanvas.width = Math.max(1, Math.round(box.width * dpr));
+  handCanvas.height = Math.max(1, Math.round(box.height * dpr));
+  const g = handCanvas.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.strokeStyle = 'rgba(217,48,37,.95)';
+  g.lineWidth = 2.2; g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const st of hand.strokes) {
+    if (!st.length) continue;
+    g.beginPath();
+    st.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]));
+    g.stroke();
+  }
+}
+
+function remember() {
+  hand.undo.push(hand.strokes.slice());
+  if (hand.undo.length > 200) hand.undo.shift();
+}
+
+function rub(x, y) {
+  const kept = hand.strokes.filter(st => !st.some(
+    p => Math.abs(p[0] - x) < RUB && Math.abs(p[1] - y) < RUB));
+  if (kept.length === hand.strokes.length) return;
+  hand.strokes = kept;
+  hand.rubbed = true;
+  drawHand();
+}
+
+function setHandMode(mode) {
+  hand.mode = mode;
+  el('hand-write').classList.toggle('on', mode === 'write');
+  el('hand-rub').classList.toggle('on', mode === 'rub');
+  handCanvas.classList.toggle('erasing', mode === 'rub');
+}
+
+handCanvas.addEventListener('pointerdown', event => {
+  if (event.pointerType === 'touch' || !NOTE || NOTE.id) return;  // a finger is for scrolling
+  event.preventDefault();
+  try { handCanvas.setPointerCapture(event.pointerId); } catch (err) {}
+  const box = handCanvas.getBoundingClientRect();
+  const x = event.clientX - box.left, y = event.clientY - box.top;
+  remember();
+  if (hand.mode === 'rub' || event.pointerType === 'eraser') {
+    hand.rubbing = true; hand.rubbed = false;
+    rub(x, y);
+    return;
+  }
+  hand.now = [[x, y]];
+  hand.strokes.push(hand.now);
+  drawHand();
+});
+handCanvas.addEventListener('pointermove', event => {
+  if (event.pointerType === 'touch') return;
+  const box = handCanvas.getBoundingClientRect();
+  const x = event.clientX - box.left, y = event.clientY - box.top;
+  if (hand.rubbing) { rub(x, y); return; }
+  if (!hand.now) return;
+  event.preventDefault();
+  const last = hand.now[hand.now.length - 1];
+  if (Math.abs(x - last[0]) < 1.1 && Math.abs(y - last[1]) < 1.1) return;
+  hand.now.push([Math.round(x * 10) / 10, Math.round(y * 10) / 10]);
+  drawHand();
+});
+for (const kind of ['pointerup', 'pointercancel', 'pointerleave']) {
+  handCanvas.addEventListener(kind, () => {
+    if (hand.rubbing && !hand.rubbed) hand.undo.pop();     // it took nothing
+    hand.now = null; hand.rubbing = false; hand.rubbed = false;
+  });
+}
+
+// --- the note sheet --------------------------------------------------------
+
+function openNote(note) {
+  NOTE = Object.assign({rects: []}, note);
+  const mine = !note.id;
+  el('note-title').textContent = mine ? 'New note' : 'Note ' + note.id;
+  el('note-where').textContent = note.source && note.source.file
+    ? note.source.file + ':' + note.source.line : 'page ' + note.page;
+  el('note-quote').textContent = note.anchor || '';
+  el('note-quote').hidden = !note.anchor;
+  el('note-text').value = note.note || '';
+  el('note-text').disabled = !mine;
+  for (const b of el('note-tags').querySelectorAll('button')) {
+    b.classList.toggle('on', b.dataset.tag === (note.tag || 'AUTO'));
+    b.disabled = !mine;
+  }
+  // A note already taken is shown, and changed where all of it can be seen:
+  // in the reader, with its ink on the page and its pad beside it.
+  hand.strokes = mine ? [] : (note.hand || []).map(st => st.slice());
+  hand.undo = [];
+  handCanvas.hidden = !mine && !hand.strokes.length;
+  for (const id of ['hand-write', 'hand-rub', 'hand-undo', 'hand-clear', 'note-save', 'note-hint']) {
+    el(id).hidden = !mine;
+  }
+  el('note-reader').hidden = mine;
+  setHandMode('write');
+  el('note').hidden = false;
+  drawHand();
+  if (!mine) fitHand();
+  drawNotes();
+}
+
+// a note's handwriting, scaled into the box it is shown in
+function fitHand() {
+  const pts = hand.strokes.flat();
+  if (!pts.length) return;
+  const box = handCanvas.getBoundingClientRect();
+  const x0 = Math.min(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1]));
+  const x1 = Math.max(...pts.map(p => p[0])), y1 = Math.max(...pts.map(p => p[1]));
+  const k = Math.min((box.width - 16) / Math.max(x1 - x0, 1),
+                     (box.height - 16) / Math.max(y1 - y0, 1), 1.4);
+  hand.strokes = hand.strokes.map(st => st.map(p => [8 + (p[0] - x0) * k, 8 + (p[1] - y0) * k]));
+  drawHand();
+}
+
+function closeNote(ask) {
+  const unsaved = NOTE && !NOTE.id && (el('note-text').value.trim() || hand.strokes.length);
+  if (ask && unsaved && !confirm('This note is not saved. OK closes it anyway, Cancel goes back to it.')) {
+    return;
+  }
+  NOTE = null;
+  el('note').hidden = true;
+  drawNotes();
+}
+
+async function saveNote() {
+  if (!NOTE || NOTE.id) return;
+  const tag = el('note-tags').querySelector('button.on');
+  const box = handCanvas.getBoundingClientRect();
+  const body = {
+    page: NOTE.page, kind: NOTE.kind, rect: NOTE.rect, rects: NOTE.rects,
+    tag: tag ? tag.dataset.tag : 'AUTO', note: el('note-text').value.trim(),
+    hand: hand.strokes.filter(st => st.length), pad: [Math.round(box.width), Math.round(box.height)],
+    ink: [],
+  };
+  if (!body.note && !body.hand.length) { toast('Write something first'); return; }
+  el('note-save').disabled = true;
+  try {
+    const done = await ask('/paper/' + PID + '/note', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    NOTE = null;
+    el('note').hidden = true;
+    await readMeta();
+    const at = done.note.source && done.note.source.file
+      ? done.note.source.file + ':' + done.note.source.line : 'page ' + done.note.page;
+    toast('Kept, on ' + at + ', in the open round');
+  } catch (err) {
+    toast('Not kept: ' + err.message, 5000);
+  } finally {
+    el('note-save').disabled = false;
+  }
+}
+
+el('note-x').onclick = () => closeNote(true);
+el('note-cancel').onclick = () => closeNote(true);
+el('note-save').onclick = saveNote;
+el('hand-write').onclick = () => setHandMode('write');
+el('hand-rub').onclick = () => setHandMode('rub');
+el('hand-undo').onclick = () => {
+  if (!hand.undo.length) { toast('Nothing to undo'); return; }
+  hand.strokes = hand.undo.pop();
+  drawHand();
+};
+el('hand-clear').onclick = () => {
+  if (!hand.strokes.length) return;
+  remember();                     // and undo brings it back
+  hand.strokes = [];
+  drawHand();
+};
+for (const b of el('note-tags').querySelectorAll('button')) {
+  b.onclick = () => {
+    for (const other of el('note-tags').querySelectorAll('button')) other.classList.remove('on');
+    b.classList.add('on');
+  };
+}
+
+// --- gestures on the pages: two taps or a hold to note, a swipe to turn ------
+//
+// On the three panes that show a build. Touch and pen only for the swipe: a
+// mouse has the buttons and the arrow keys, and a mouse drag is somebody
+// selecting. A double click does the mouse's noting.
+
+const DOUBLE_MS = 380, HOLD_MS = 500, SLOP = 10;
+
+// A single tap on text that can take a note says how to take one, once it is
+// clear no second tap is coming; the reader does the same.
+const HINT_EVERY = 4000;
+let hintTimer = null, lastHintAt = 0;
+
+function cancelTapHint() { clearTimeout(hintTimer); hintTimer = null; }
+
+async function onNotableText(which, clientX, clientY) {
+  const leaf = el('body-' + which).querySelector('.leaf');
+  const img = leaf && leaf.querySelector('img');
+  if (!img) return false;
+  const n = Number(leaf.dataset.page);
+  const box = img.getBoundingClientRect();
+  const [w, h] = pageSize(n, which);
+  const x = (clientX - box.left) / box.width * w, y = (clientY - box.top) / box.height * h;
+  try {
+    let layout;
+    if (which === 'new') layout = await layoutOf(n);
+    else {
+      const key = refOf('diff') + '/' + n;
+      if (!DIFF_LAYOUT[key]) {
+        DIFF_LAYOUT[key] = await ask('/paper/' + PID + '/version/'
+                                     + encodeURIComponent(refOf('diff')) + '/layout/' + n);
+      }
+      layout = DIFF_LAYOUT[key];
+    }
+    return (layout.sentences || []).some(s => s.rects.some(
+      r => x >= r[0] - 2 && x <= r[2] + 2 && y >= r[1] - 2 && y <= r[3] + 2));
+  } catch (err) {
+    return false;
+  }
+}
+
+function hintAfterTap(which, clientX, clientY) {
+  cancelTapHint();
+  const can = which === 'new' ? canNote() : which === 'diff' ? canNoteDiff() : false;
+  if (!can || !el('note').hidden) return;
+  hintTimer = setTimeout(async () => {
+    hintTimer = null;
+    if (Date.now() - lastHintAt < HINT_EVERY) return;
+    if (!(await onNotableText(which, clientX, clientY)) || !el('note').hidden) return;
+    lastHintAt = Date.now();
+    toast('Tap twice or hold to put a note on this', 1600);
+  }, DOUBLE_MS + 40);
+}
+
+function gestures(which) {
+  const body = el('body-' + which);
+  let start = null, lastTap = null, holdTimer = null;
+  const wide = () => body.scrollWidth > body.clientWidth + 2;
+  const leaf = () => body.querySelector('.leaf');
+  const stopHold = () => { clearTimeout(holdTimer); holdTimer = null; };
+
+  body.addEventListener('pointerdown', event => {
+    if (event.pointerType === 'mouse' || !event.isPrimary || !leaf()) { start = null; return; }
+    cancelTapHint();
+    if (event.target.closest('.pin')) { start = null; return; }
+    // Whether the page is wider than the pane is settled here, once: the page
+    // follows the finger, and a page pushed right overhangs the pane and
+    // would read as zoomed in by the time the finger lifts.
+    start = {x: event.clientX, y: event.clientY, t: Date.now(), id: event.pointerId,
+             wide: wide()};
+    stopHold();
+    holdTimer = setTimeout(() => {
+      if (!start) return;
+      start.held = true;
+      pick(which, start.x, start.y);
+    }, HOLD_MS);
+  });
+  body.addEventListener('pointermove', event => {
+    if (!start || event.pointerId !== start.id) return;
+    const dx = event.clientX - start.x, dy = event.clientY - start.y;
+    if (Math.abs(dx) + Math.abs(dy) > SLOP) stopHold();
+    if (start.wide || Math.abs(dx) < Math.abs(dy) || Math.abs(dx) < SLOP) return;
+    const sheet = leaf();
+    sheet.classList.add('moving');
+    sheet.style.transform = 'translateX(' + dx + 'px)';
+  });
+  const end = event => {
+    if (!start || event.pointerId !== start.id) return;
+    stopHold();
+    const from = start;
+    start = null;
+    const sheet = leaf();
+    if (sheet) { sheet.classList.remove('moving'); sheet.style.transform = ''; }
+    if (event.type === 'pointercancel' || from.held) return;
+    const dx = event.clientX - from.x, dy = event.clientY - from.y;
+    const quick = Date.now() - from.t < 800;
+    if (Math.abs(dx) + Math.abs(dy) < SLOP && quick) {
+      const near = lastTap && Date.now() - lastTap.t < DOUBLE_MS
+        && Math.abs(event.clientX - lastTap.x) + Math.abs(event.clientY - lastTap.y) < 34;
+      lastTap = near ? null : {x: event.clientX, y: event.clientY, t: Date.now()};
+      if (near) pick(which, event.clientX, event.clientY);
+      else hintAfterTap(which, event.clientX, event.clientY);
+      return;
+    }
+    if (from.wide || !quick || Math.abs(dx) < 60 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
+    const before = view.page;
+    turn(dx < 0 ? 1 : -1);
+    if (view.page !== before) PANES.forEach(p => { el('body-' + p).scrollTop = 0; });
+    else toast(view.page === 1 ? 'This is the first page' : 'This is the last page');
+  };
+  body.addEventListener('pointerup', end);
+  body.addEventListener('pointercancel', end);
+  body.addEventListener('dblclick', event => {
+    if (!event.target.closest('.pin') && leaf()) pick(which, event.clientX, event.clientY);
+  });
+  // the browser's own long press would put a menu on top of ours
+  body.addEventListener('contextmenu', event => {
+    if (event.target.closest('.leaf')) event.preventDefault();
+  });
+  new ResizeObserver(() => body.classList.toggle('wide', wide())).observe(body);
+}
+PANES.forEach(gestures);
+
+PANES.forEach(which => { el('again-' + which).onclick = () => compile(which, true); });
+
+el('prev').onclick = () => turn(-1);
+el('next').onclick = () => turn(1);
+el('in').onclick = () => { view.zoom = (view.zoom || 1) * 1.25; applyZoom(); };
+el('out').onclick = () => { view.zoom = (view.zoom || 1) / 1.25; applyZoom(); };
+el('fit').onclick = () => { view.zoom = 0; applyZoom(); };
+
+// Two fingers on a page zoom that page, and never the whole view with its bars.
+// The page is resized around the point between the fingers, so what was under
+// them stays under them and a two-finger drag pans as it zooms. Not while the
+// pen is near: a palm resting beside it is two contacts too.
+function pinchZoom(body, leafOf, scaleOf, setScale) {
+  const PALM = 90, GRACE = 1600;   // an iPad fingertip is 40 to 70 across
+  let at = null, penAt = 0;
+  for (const kind of ['pointerdown', 'pointermove']) {
+    document.addEventListener(kind, event => {
+      if (event.pointerType === 'pen') penAt = Date.now();
+    }, true);
+  }
+  const two = event => {
+    if (event.touches.length !== 2) return null;
+    const [a, b] = event.touches;
+    if ([a, b].some(t => 2 * Math.max(t.radiusX || 0, t.radiusY || 0) > PALM)) return null;
+    return {d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+            x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2};
+  };
+  body.addEventListener('touchstart', event => {
+    const got = two(event), leaf = leafOf();
+    if (!got || !got.d || !leaf || Date.now() - penAt < GRACE) return;
+    event.preventDefault();
+    const r = leaf.getBoundingClientRect();
+    at = {d: got.d, scale: scaleOf(), fx: (got.x - r.left) / r.width, fy: (got.y - r.top) / r.height};
+  }, {passive: false});
+  body.addEventListener('touchmove', event => {
+    const got = at && two(event), leaf = leafOf();
+    if (!got || !leaf) return;
+    event.preventDefault();
+    setScale(Math.min(4, Math.max(0.5, at.scale * got.d / at.d)));
+    const r = leaf.getBoundingClientRect();
+    body.scrollLeft += r.left + at.fx * r.width - got.x;
+    body.scrollTop += r.top + at.fy * r.height - got.y;
+  }, {passive: false});
+  for (const kind of ['touchend', 'touchcancel']) {
+    body.addEventListener(kind, event => {
+      if (!at || event.touches.length >= 2) return;
+      at = null;
+      if (Math.abs(scaleOf() - 1) < 0.04) setScale(1);
+    });
+  }
+}
+// Safari's own gesture events, which it fires for a pinch whatever the CSS says
+for (const kind of ['gesturestart', 'gesturechange']) {
+  document.addEventListener(kind, event => event.preventDefault(), {passive: false});
+}
+
+// one zoom for the three panes, as the buttons have it: 0 is fit
+PANES.forEach(which => pinchZoom(el('body-' + which),
+  () => el('body-' + which).querySelector('.leaf'),
+  () => view.zoom || 1,
+  scale => { view.zoom = Math.abs(scale - 1) < 0.01 ? 0 : scale; applyZoom(); }));
+el('lock').onclick = event => {
+  view.lock = !view.lock;
+  event.target.classList.toggle('on', view.lock);
+  event.target.textContent = view.lock ? 'locked' : 'free';
+};
+el('only-source').onclick = event => {
+  view.source = !view.source;
+  event.target.classList.toggle('on', view.source);
+  drawLog();
+};
+el('as-pdf').onclick = () => {
+  view.mode = 'pdf';
+  el('as-pdf').classList.add('on'); el('as-source').classList.remove('on');
+  load('diff');
+};
+el('as-source').onclick = () => {
+  view.mode = 'source';
+  el('as-source').classList.add('on'); el('as-pdf').classList.remove('on');
+  loadSource();
+  markNoting();
+};
+document.querySelectorAll('#tabs button').forEach(tab => {
+  tab.onclick = () => {
+    document.body.dataset.only = tab.dataset.only;
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b === tab));
+  };
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'ArrowRight' || event.key === 'PageDown') turn(1);
+  if (event.key === 'ArrowLeft' || event.key === 'PageUp') turn(-1);
+});
+document.body.dataset.only = 'old';
+
+readMeta();
+Orderless.filter(el('find-commit'), () => [], () => drawLog());
+
+readLog().catch(err => {
+  el('log').innerHTML = '<pre class="err">' + escaped(err.message) + '</pre>';
+});
+</script>

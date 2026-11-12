@@ -1,0 +1,27 @@
+# The test suite on every push and pull request, with TeX, latexdiff and aspell
+# installed so the tests that compile a paper run too. Neither claude nor codex
+# is installed: the agent tests stand in for them.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends latexmk texlive-latex-base \
+            texlive-latex-recommended texlive-latex-extra texlive-plain-generic latexdiff aspell aspell-en
+      - run: git config --global user.name ci && git config --global user.email ci@example.org
+      - run: uv run --extra dev python -m pytest -q

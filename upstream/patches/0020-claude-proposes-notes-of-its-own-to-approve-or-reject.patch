@@ -1,0 +1,226 @@
+diff --git a/reader.html b/reader.html
+index 11b947c..b0d7ba4 100644
+--- a/reader.html
++++ b/reader.html
+@@ -197,6 +197,16 @@
+                      cursor: pointer; }
+   /* a pin whose note has a fix waiting to be chosen */
+   .pin.has-fix { box-shadow: 0 0 0 3px var(--accent), 0 1px 3px rgba(0,0,0,.4); }
++  /* a note Claude wrote itself, to approve or reject: Claude's colour, square */
++  .pin.proposal { background: var(--claude); border-radius: 5px; }
++  .pin.proposal.done { background: var(--paper); }
++  .fx-card.rejected { opacity: .6; }
++  .fx-badge.rejected { background: var(--muted); }
++  .fx-reply button.fx-reject { color: var(--pen); border-color: color-mix(in srgb, var(--pen) 45%, transparent); }
++  #review-focus { font: inherit; font-size: .78rem; border: 1px solid #8884; border-radius: 8px;
++                  padding: .35rem .55rem; background: var(--bg); color: var(--ink);
++                  min-width: 0; width: 15rem; max-width: 40vw; }
++  #review-focus[hidden] { display: none; }
+   /* the panel's Save, again, where the hand already is: under the tool bar */
+   #quick-save {
+     position: fixed; z-index: 31; border: 0; border-radius: 8px;
+@@ -381,6 +391,10 @@
+   <span class="agent-said" id="agent-said" hidden></span>
+   <button id="ask-agent" type="button" hidden
+           title="claude answers the newest round: applies what leaves no choice, proposes the rest">Ask claude</button>
++  <input id="review-focus" type="text" hidden autocomplete="off"
++         placeholder="what to look for (optional): clarity, notation…">
++  <button id="ask-review" type="button" hidden
++          title="claude reads the paper first and writes notes of its own, each with its fix, for you to approve or reject">Review</button>
+   <button id="commit" type="button" hidden
+           title="Commit what the applied fixes changed, and nothing else">Commit</button>
+   <button id="commit-branch" type="button" hidden
+@@ -425,7 +439,9 @@
+     <button class="tool on" data-show="past" type="button"
+             title="Notes already sent in earlier readings">sent</button>
+     <button class="tool on" data-show="claude" type="button"
+-            title="Claude's own notes on this paper">Claude</button>
++            title="Claude's own notes on this paper, and its proposals">Claude</button>
++    <button class="tool" data-show="proposals" type="button"
++            title="Only Claude's proposals still to approve or reject">proposals</button>
+     <button class="tool" data-show="answered" type="button"
+             title="Also the sent notes already answered, done or rejected">answered</button>
+     <button class="tool" data-show="fixes" type="button"
+@@ -797,7 +813,7 @@ const SHOW_STORE = 'paper-show';
+ // `answered` off: a sent note that is done or rejected is not drawn, so what is
+ // on the page is what is still waiting. `fixes` on: only the notes with a fix
+ // to choose, which after an answered round is the work there is.
+-let SHOW = {past: true, claude: true, answered: false, fixes: false};
++let SHOW = {past: true, claude: true, answered: false, fixes: false, proposals: false};
+ try {
+   const saved = JSON.parse(localStorage.getItem(SHOW_STORE) || 'null');
+   if (saved) SHOW = Object.assign(SHOW, saved);
+@@ -815,6 +831,10 @@ function allNotes() {
+     out = out.concat((META.claude_notes || []).map(n => Object.assign({claude: true}, n)));
+   }
+   if (SHOW.fixes) out = out.filter(n => waitingFixes(n).length);
++  // Claude's proposals are sent notes with an author: the Claude chip hides
++  // them with the rest of Claude's, `proposals` shows nothing else
++  if (!SHOW.claude) out = out.filter(n => n.by !== 'claude');
++  if (SHOW.proposals) out = out.filter(n => n.by === 'claude' && !answered(n));
+   return out;
+ }
+ 
+@@ -844,7 +864,7 @@ function placePins() {
+     // a sentence that wraps gets a band per line, not one block over the lot
+     for (const r of (n.rects && n.rects.length ? n.rects : [n.rect])) {
+       const band = document.createElement('div');
+-      band.className = 'band' + (n.claude ? ' claude' : '')
++      band.className = 'band' + (n.claude || n.by === 'claude' ? ' claude' : '')
+         + (n.status === 'done' ? ' done' : '');
+       band.style.left = pc(r[0], size[0]);
+       band.style.top = pc(r[1], size[1]);
+@@ -854,7 +874,7 @@ function placePins() {
+     }
+     const pin = document.createElement('button');
+     pin.className = 'pin ' + (n.claude ? 'claude' : n.tag) + (n.status === 'done' ? ' done' : '')
+-      + (waitingFixes(n).length ? ' has-fix' : '');
++      + (waitingFixes(n).length ? ' has-fix' : '') + (n.by === 'claude' ? ' proposal' : '');
+     pin.textContent = n.claude ? 'C' : (i + 1);
+     let px = n.rect[2], py = (n.rect[1] + n.rect[3]) / 2;
+     while (taken.some(t => t.page === n.page
+@@ -1512,11 +1532,15 @@ function showFixes(note) {
+   const box = document.getElementById('sheet-fixes');
+   box.innerHTML = '';
+   const said = answersOf(note);
+-  box.hidden = !(said.fixes.length || said.thread.length);
+-  if (box.hidden) return;
+   const open = !(note.status === 'done' || note.status === 'rejected');
++  // a note of Claude's own is there to be decided, with a fix or without
++  const proposal = note.by === 'claude';
++  box.hidden = !(said.fixes.length || said.thread.length || (proposal && open));
++  if (box.hidden) return;
+   const waiting = said.fixes.filter(f => f.state === 'proposed').length;
+-  box.append(fxMake('div', 'fx-head', waiting && open
++  box.append(fxMake('div', 'fx-head', proposal && open
++    ? (waiting ? 'Claude proposes this: approve or reject' : 'Claude remarks this, with no fix')
++    : waiting && open
+     ? (waiting === 1 ? 'A fix is proposed' : waiting + ' fixes are proposed: choose one')
+     : 'What came back'));
+   for (const fix of said.fixes) {
+@@ -1526,7 +1550,7 @@ function showFixes(note) {
+     what.append(fxMake('span', 'fx-by', fix.by));
+     top.append(what);
+     if (fix.state === 'proposed' && open) {
+-      const use = fxMake('button', 'fx-use', 'Use this');
++      const use = fxMake('button', 'fx-use', proposal ? 'Approve' : 'Use this');
+       use.type = 'button';
+       use.onclick = () => useFix(note, fix, use);
+       top.append(use);
+@@ -1539,6 +1563,8 @@ function showFixes(note) {
+       top.append(back);
+     } else if (fix.state === 'failed') {
+       top.append(fxMake('span', 'fx-badge failed', 'did not apply'));
++    } else if (fix.state === 'rejected') {
++      top.append(fxMake('span', 'fx-badge rejected', 'rejected'));
+     }
+     card.append(top);
+     if (fix.why) card.append(fxMake('div', 'fx-why', fix.why));
+@@ -1556,15 +1582,42 @@ function showFixes(note) {
+   if (open) {
+     const row = fxMake('div', 'fx-reply');
+     const input = fxMake('input');
+-    input.placeholder = 'Reply: a further note, or which way to go';
++    input.placeholder = proposal ? 'Why not, if you reject it (optional)'
++      : 'Reply: a further note, or which way to go';
+     const send = fxMake('button', '', 'Reply');
+     send.type = 'button';
+     send.onclick = () => replyTo(note, input, send);
+-    row.append(input, send);
++    row.append(input);
++    if (proposal) {
++      const no = fxMake('button', 'fx-reject', 'Reject');
++      no.type = 'button';
++      no.title = 'close it as rejected; what is typed beside it is kept as the reason';
++      no.onclick = () => rejectProposal(note, input, no);
++      row.append(no);
++    } else {
++      row.append(send);
++    }
+     box.append(row);
+   }
+ }
+ 
++function rejectProposal(note, input, button) {
++  button.disabled = true;
++  postJSON('/paper/' + PID + '/proposals/decide',
++           {notes: [note.id], what: 'reject', why: input.value})
++    .then(data => {
++      if (!data.ok) throw new Error(data.error || 'unknown error');
++      const failed = Object.values(data.failed || {});
++      if (failed.length) throw new Error(failed[0]);
++      return load().then(() => {
++        const next = nextWithFixes(note);
++        if (next) { openNote(next); toast('Rejected. The next one:'); }
++        else { closeSheet(); toast('Rejected.'); }
++      });
++    })
++    .catch(err => { toast('Not rejected: ' + err.message, 6000); button.disabled = false; });
++}
++
+ function useFix(note, fix, button) {
+   button.disabled = true;
+   postJSON('/paper/' + PID + '/feedback/apply', {note: note.id, fixes: [fix.id]})
+@@ -1646,7 +1699,14 @@ function showAgentAndCommit() {
+   const r = (META && META.review) || {};
+   said.hidden = !a.state;
+   said.className = 'agent-said ' + (a.state || '');
+-  if (a.state === 'running') {
++  const reviewing = a.mode === 'review';
++  if (reviewing && a.state === 'running') {
++    said.textContent = 'claude is reviewing the paper…';
++  } else if (reviewing && a.state === 'failed') {
++    said.textContent = 'claude could not review: ' + (a.said || 'see its log');
++  } else if (reviewing && a.state === 'done') {
++    said.textContent = 'claude proposed ' + (a.notes || 0) + ' note' + (a.notes === 1 ? '' : 's');
++  } else if (a.state === 'running') {
+     said.textContent = 'claude is answering the round of ' + a.round + '…';
+   } else if (a.state === 'failed') {
+     said.textContent = 'claude could not answer: ' + (a.said || 'see its log');
+@@ -1658,8 +1718,14 @@ function showAgentAndCommit() {
+   }
+   // someone to ask, and something to ask about: a sent note nobody has answered
+   const answers = (META && META.feedback) || {};
+-  const unanswered = ((META && META.past) || []).some(n => !answered(n) && !answers[n.id]);
+-  ask.hidden = !(a.mode && a.mode !== 'off' && a.state !== 'running' && unanswered);
++  const unanswered = ((META && META.past) || []).some(n => !answered(n) && !answers[n.id]
++                                                         && n.by !== 'claude');
++  ask.hidden = !(a.mode && a.mode !== 'off' && a.mode !== 'review' && a.state !== 'running'
++                 && unanswered);
++  // a review needs a source to fix, and only one claude at a time
++  const review = document.getElementById('ask-review');
++  review.hidden = !META || /\.pdf$/i.test(META.main || '') || a.state === 'running';
++  if (review.hidden) document.getElementById('review-focus').hidden = true;
+   ask.textContent = a.state && a.state !== 'running' ? 'Ask claude again' : 'Ask claude';
+ 
+   const n = r.to_commit || 0;
+@@ -2301,6 +2367,29 @@ document.getElementById('ink-clear').onclick = () => {
+   toast(was ? 'The ink of ' + was.id + ' is left as it was' : 'Ink cleared');
+ };
+ document.getElementById('sheet-rewrite').onclick = () => { if (EDIT) rewriteHand(EDIT); };
++// Review asks first what to look for, in the field beside it, and goes on the
++// second press: a general read when the field is left empty
++document.getElementById('ask-review').onclick = (e) => {
++  const focus = document.getElementById('review-focus');
++  if (focus.hidden) {
++    focus.hidden = false;
++    e.target.textContent = 'Start the review';
++    focus.focus();
++    return;
++  }
++  focus.hidden = true;
++  e.target.textContent = 'Review';
++  headerCall('/paper/' + PID + '/review', {focus: focus.value},
++    d => 'claude is reading the paper. Its notes appear as it writes them, each to approve or reject.',
++    e.target);
++};
++document.getElementById('review-focus').onkeydown = (e) => {
++  if (e.key === 'Enter') document.getElementById('ask-review').click();
++  if (e.key === 'Escape') {
++    e.target.hidden = true;
++    document.getElementById('ask-review').textContent = 'Review';
++  }
++};
+ document.getElementById('ask-agent').onclick = (e) => headerCall(
+   '/paper/' + PID + '/agent', {again: META && META.agent && !!META.agent.state},
+   d => 'claude is answering the round of ' + d.round + '. The notes fill in as it goes.', e.target);

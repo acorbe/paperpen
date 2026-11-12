@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Reading a paper · paperpen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Adding a paper, reading it with a pen, and what a round is.">
+<link rel="stylesheet" href="manual.css">
+<header class="top">
+  <a class="mark" href="index.html">paperpen</a>
+  <nav><a href="index.html">What it is</a>
+    <a href="reading.html" class="here">Reading a paper</a>
+    <a href="writing.html">Writing it back</a>
+    <a href="network.html">The tablet, over the network</a>
+    <a href="agents.html">Working the queue</a>
+    <a href="commands.html">Every command</a></nav>
+</header>
+<main>
+<h1>Reading a paper</h1>
+<p class="lede">The shelf, the reader, and what a round is.</p>
+
+<h2>Adding one</h2>
+<pre><code>paperpen add ~/papers/my-manuscript     # finds the main .tex, builds it once
+paperpen add ~/inbox/referee-draft.pdf   # a PDF with no source behind it
+paperpen list</code></pre>
+<p><code>add</code> looks for the <code>.tex</code> holding
+<code>\documentclass</code>, takes the paper's name from its
+<code>\title</code>, compiles it once to check, and registers it. A paper that
+does not compile is not registered. <code>--main</code>, <code>--name</code>
+and <code>--task</code> override what it worked out.</p>
+
+<div class="note"><b>SyncTeX is what makes a note worth having.</b> Build with
+<code>latexmk -pdf -synctex=1</code>, which is what paperpen does for you. A
+paper without it can still be read and marked up; its notes carry a page and a
+quoted sentence, and no source line.</div>
+
+<h2>What a paper is, on the shelf</h2>
+<p>Two fields decide how a paper behaves, and both can be set from the card or
+from <code>paperpen about</code>:</p>
+<table>
+  <tr><th>Field</th><th>Values</th><th>What it changes</th></tr>
+  <tr><td>kind</td><td>mine, coauthor, student, referee</td>
+      <td>Who the reading is for, and the default delivery.</td></tr>
+  <tr><td>delivery</td><td>repo, folder, pdf</td>
+      <td>Where a finished round goes.</td></tr>
+</table>
+<pre><code>paperpen about my-manuscript --kind mine --delivery repo
+paperpen about referee-draft --brief "Is the claim in Sec. 4 supported?"</code></pre>
+<p>The brief is shown on the card and in the reader: what this reading is
+for, in one line, written before it starts.</p>
+
+<h2>The reader</h2>
+<figure>
+  <img src="shots/reader.png" alt="A page of a paper with a note being written">
+  <figcaption>A note is made on a sentence, a word, a figure or a region. The
+  selection is the anchor, so a note is never vague about what it is
+  about.</figcaption>
+</figure>
+<p>Three tools: <b>Read</b> moves the paper, <b>Note</b> types one, <b>Pen</b>
+writes on it. A finger scrolls and only a stylus draws, so the paper can be
+moved with a hand resting on the glass.</p>
+<ul>
+  <li><b>Sentence or word.</b> The text layer is cut into sentences, each
+  keeping the boxes it occupies, so tapping a line means the sentence and not
+  the line.</li>
+  <li><b>Handwriting is kept as ink</b>, cropped to the page around it. There
+  is no OCR: the picture is the note, and whoever picks it up reads it.</li>
+  <li><b>Rebuild</b> compiles again when the source has moved past the PDF on
+  show. The reader says when that has happened.</li>
+</ul>
+
+<h2>Rounds</h2>
+<p>A round is a reading, not a note. It opens with the first note and stays
+open until it is finished, which is when it is delivered:</p>
+<pre><code>paperpen rounds my-manuscript             # every round, and how each stands
+paperpen finish my-manuscript             # deliver it the way this paper is delivered
+paperpen finish referee-draft --as pdf    # or override, once</code></pre>
+<p>Delivery is one of three:</p>
+<table>
+  <tr><th>repo</th><td>Commits <code>review/&lt;date&gt;/</code> into the
+  paper's own repository: <code>NOTES.md</code> to act on,
+  <code>notes.json</code> as the record, <code>ink/&lt;id&gt;.png</code> for
+  each handwritten note.</td></tr>
+  <tr><th>folder</th><td>The same directory, written beside the paper and not
+  committed.</td></tr>
+  <tr><th>pdf</th><td><code>&lt;main&gt;-notes-&lt;date&gt;.pdf</code>: the
+  paper with every note in the margin, for somebody who does not have the
+  repository.</td></tr>
+</table>
+<p>Whatever the delivery, the round is also recorded locally. That is
+deliberate: a draft sent back as a PDF leaves no trace anywhere else, and a
+repository can be on a machine that is not this one.</p>
+
+<h2 id="after-finish-and-send">After Finish and send</h2>
+<p>Finish and send closes the round and commits
+<code>review/&lt;date&gt;/</code> into the paper's repository. Answering the
+notes happens in the paper's checkout, by an agent. paperpen starts one there
+itself, headless, the moment the round is delivered, and that is the usual way
+(<a href="agents.html">An agent above the papers</a>). The other way is a
+session you start by hand, pointed at the round: any LLM that can run a shell
+command will do, and Claude Opus is what we have used.</p>
+<p>The agent paperpen starts is Claude Code by default, and OpenAI Codex with
+<code>--runner codex</code>: for one run on <code>paperpen agent</code> or
+<code>paperpen review</code>, for a paper with <code>paperpen about &lt;paper&gt;
+--runner codex</code>, or for every paper with <code>PAPERPEN_RUNNER=codex</code>.
+Claude Code is given a list of what it may do, paperpen's own commands and
+reading files. Codex has no such list and is fenced by its
+<code>workspace-write</code> sandbox instead: it may write the paper's checkout
+and paperpen's data and cache, and is told not to commit. <code>paperpen
+onboard --check</code> says which of the two is installed and which is in
+force.</p>
+<p>Each note
+carries the file and line of LaTeX it is about, its class, and the sentence it
+sits on, and a handwritten note is a picture, <code>ink/&lt;id&gt;.png</code>,
+which the model reads directly. A session therefore needs the round and little
+else:</p>
+<pre><code>Work through review/&lt;date&gt;/NOTES.md in this repository. For each note, change
+the LaTeX it points at, or say why not; for a handwritten note, read its
+ink/&lt;id&gt;.png. Rebuild the paper, close each note with
+  paperpen resolve &lt;paper&gt; &lt;note-id&gt; done|rejected "what was done"
+and commit.</code></pre>
+<p>Whether a round's corrections go in, and when, is a decision about the
+paper: nothing is committed until you say so, in the reader or with
+<code>paperpen commit</code>. The commit that comes back is what the
+next reading is read against, and <code>paperpen versions &lt;paper&gt;</code>
+shows it beside the draft the notes were written on. This applies to a paper
+delivered into a repository; a draft sent back as a PDF is corrected by
+whoever wrote it.</p>
+
+<h2>The queue</h2>
+<figure>
+  <img src="shots/queue.png" alt="Every open note from every paper, in one list">
+  <figcaption>Every open note, from every paper, oldest first, because the
+  work is rarely "read a paper" and usually "nine notes are still
+  open".</figcaption>
+</figure>
+<p>A note carries a class (SCIENCE, LANGUAGE, QUESTION, TODO) or is left on
+AUTO for whoever picks it up to decide. Closing one says what was done:</p>
+<pre><code>paperpen classify my-manuscript 2026-04-02-07 SCIENCE
+paperpen resolve  my-manuscript 2026-04-02-07 done "rewrote the paragraph"
+paperpen resolve  my-manuscript 2026-04-02-08 rejected "the figure is right as it is"</code></pre>
+<p>Both work from any directory, and both write wherever that round is kept:
+the copy in the paper's repository, so the <code>NOTES.md</code> a co-author
+reads is regenerated, and the local record.</p>
+<div class="next"><a href="index.html">&larr; What it is</a><a href="writing.html">Writing it back &rarr;</a></div>
+</main>
+<footer>
+  Read a paper on a tablet, mark it up with a pen, get the marks back where the
+  paper is written. · <a href="index.html">the manual</a> ·
+  by <a href="https://github.com/acorbe">acorbe</a>
+</footer>
+</html>

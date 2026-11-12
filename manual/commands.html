@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Every command · paperpen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Every paperpen command, in one page.">
+<link rel="stylesheet" href="manual.css">
+<header class="top">
+  <a class="mark" href="index.html">paperpen</a>
+  <nav><a href="index.html">What it is</a>
+    <a href="reading.html">Reading a paper</a>
+    <a href="writing.html">Writing it back</a>
+    <a href="network.html">The tablet, over the network</a>
+    <a href="agents.html">Working the queue</a>
+    <a href="commands.html" class="here">Every command</a></nav>
+</header>
+<main>
+<h1>Every command</h1>
+<p class="lede"><code>paperpen --help</code> prints this list;
+<code>paperpen &lt;command&gt; --help</code> prints one.</p>
+
+<h2>The shelf</h2>
+<table>
+  <tr><td><code>paperpen add &lt;repo-or-pdf&gt;</code></td><td>Register a paper: find the main file, build it once.</td></tr>
+  <tr><td><code>paperpen list</code></td><td>What is registered.</td></tr>
+  <tr><td><code>paperpen shelf</code></td><td>The shelf in the terminal, and where the browser one is.</td></tr>
+  <tr><td><code>paperpen about &lt;paper&gt;</code></td><td>Kind, brief, delivery, archived, the agent and its runner. <code>--agent</code>, <code>--runner claude|codex</code>.</td></tr>
+  <tr><td><code>paperpen where</code></td><td>Which registry and caches are in force.</td></tr>
+  <tr><td><code>paperpen check &lt;repo&gt;</code></td><td>Whether a repository is ready to be added.</td></tr>
+</table>
+
+<h2>Reading and rounds</h2>
+<table>
+  <tr><td><code>paperpen serve</code></td><td>The shelf, the reader, the editor. <code>--port</code>, <code>--host</code>, <code>--lan</code>, <code>--no-tls</code>, <code>--qr</code>, <code>--light</code>, <code>--debug</code> (loopback only).</td></tr>
+  <tr><td><code>paperpen build &lt;paper&gt;</code></td><td>latexmk with SyncTeX, into the cache.</td></tr>
+  <tr><td><code>paperpen rounds &lt;paper&gt;</code></td><td>Every round, and how each one stands.</td></tr>
+  <tr><td><code>paperpen finish &lt;paper&gt;</code></td><td>Close the open round and deliver it. <code>--as repo|pdf|folder</code>, <code>--no-commit</code>.</td></tr>
+  <tr><td><code>paperpen notes &lt;paper&gt;</code></td><td>Every note, and whether it is closed.</td></tr>
+</table>
+
+<h2>The queue</h2>
+<table>
+  <tr><td><code>paperpen queue</code></td><td>Every open note. <code>--json</code>, <code>--paper</code>, <code>--tag</code>, <code>--unclassified</code>, <code>--older-than</code>, <code>--limit</code>.</td></tr>
+  <tr><td><code>paperpen next</code></td><td>What to do first. <code>--json</code>, <code>--all</code>, <code>--fast</code>.</td></tr>
+  <tr><td><code>paperpen classify &lt;paper&gt; &lt;id&gt; &lt;TAG&gt;</code></td><td>SCIENCE, LANGUAGE, QUESTION or TODO.</td></tr>
+  <tr><td><code>paperpen resolve &lt;paper&gt; &lt;id&gt; &lt;done|rejected|open&gt; ["what was done"]</code></td><td>Close a note, with what was decided.</td></tr>
+</table>
+
+<h2>The agent reading first</h2>
+<table>
+  <tr><td><code>paperpen agent &lt;paper&gt;</code></td><td>The agent answers the newest round, Claude Code unless <code>--runner codex</code>. <code>--print</code>, <code>--background</code>, <code>--status</code>, <code>--stop</code>.</td></tr>
+  <tr><td><code>paperpen review &lt;paper&gt;</code></td><td>The agent reads the paper and writes notes of its own, each with its fix, into <code>review/&lt;date&gt;-claude/</code>, or <code>-codex/</code>. <code>--focus</code>, <code>--max</code>, <code>--runner</code>, <code>--background</code>, <code>--print</code>.</td></tr>
+  <tr><td><code>paperpen suggest &lt;paper&gt; --tag T --note "..."</code></td><td>One such note, placed from the text it fixes: <code>--file</code>, <code>--old</code>, <code>--new</code> (or <code>--edits</code> JSON), or <code>--at</code> for a remark with no fix.</td></tr>
+  <tr><td><code>paperpen approve &lt;paper&gt; &lt;id&gt; [&lt;fix&gt;]</code></td><td>Put its fix in the working tree and close it done.</td></tr>
+  <tr><td><code>paperpen reject &lt;paper&gt; &lt;id&gt;...</code></td><td>Close them as rejected. <code>--why</code>, which the next run reads.</td></tr>
+</table>
+
+<h2>Versions</h2>
+<table>
+  <tr><td><code>paperpen versions &lt;paper&gt;</code></td><td>The log, and which of it is built. <code>-n</code>.</td></tr>
+  <tr><td><code>paperpen versions &lt;paper&gt; --build &lt;ref&gt;</code></td><td>The paper as it was at that commit.</td></tr>
+  <tr><td><code>paperpen versions &lt;paper&gt; --diff &lt;ref&gt;</code></td><td>latexdiff, compiled.</td></tr>
+  <tr><td><code>paperpen versions &lt;paper&gt; --source &lt;ref&gt;</code></td><td>What git diff says about the .tex.</td></tr>
+  <tr><td><code>paperpen versions &lt;paper&gt; --forget</code></td><td>Throw the version builds away.</td></tr>
+</table>
+
+<h2>The network, and the state</h2>
+<table>
+  <tr><td><code>paperpen lan</code></td><td>Choose how the reader on the network lets people in: password and app code, password, or no login. <code>--no-login</code>, <code>--clear</code>.</td></tr>
+  <tr><td><code>paperpen tls</code></td><td>A self-signed certificate, and how to trust it. <code>--renew</code>.</td></tr>
+  <tr><td><code>paperpen qr</code></td><td>The address as a QR code. <code>--url</code>, <code>--light</code>.</td></tr>
+  <tr><td><code>paperpen bundle</code></td><td>The state as one .tar.gz. <code>--ink</code>, <code>-o</code>.</td></tr>
+  <tr><td><code>paperpen record &lt;paper&gt;</code></td><td>Refresh <code>review/paperpen.json</code> in the paper's repository.</td></tr>
+  <tr><td><code>paperpen adopt &lt;repo-or-url&gt;</code></td><td>Put a paper back on the shelf from the record its repository carries.</td></tr>
+  <tr><td><code>paperpen sync</code></td><td>Pull the papers' repositories, re-read the rounds.</td></tr>
+</table>
+
+<h2>Environment</h2>
+<table>
+  <tr><td><code>PAPERPEN_HOME</code></td><td>Where the registry lives.</td></tr>
+  <tr><td><code>PAPERPEN_CACHE</code></td><td>Builds and rendered pages.</td></tr>
+  <tr><td><code>PAPERPEN_DATA</code></td><td>The rounds.</td></tr>
+  <tr><td><code>PAPERPEN_LATEXDIFF</code></td><td>The latexdiff command, for a manuscript that needs its own flags.</td></tr>
+</table>
+<div class="next"><a href="agents.html">&larr; Working the queue</a><span></span></div>
+</main>
+<footer>
+  Read a paper on a tablet, mark it up with a pen, get the marks back where the
+  paper is written. · <a href="index.html">the manual</a> ·
+  by <a href="https://github.com/acorbe">acorbe</a>
+</footer>
+</html>

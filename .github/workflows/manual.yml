@@ -1,0 +1,38 @@
+# The manual, published by GitHub Pages. manual/ is committed as finished HTML
+# (scripts/manual.py writes it, and tests/test_manual.py checks it is in step),
+# so this copies a directory and builds nothing.
+#
+# It runs only once Pages is switched on for the repository and the repository
+# variable PAGES is `on` (gh variable set PAGES --body on), so a repository kept
+# private, without Pages, shows a skipped job rather than a failed one.
+name: manual
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: vars.PAGES == 'on'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: manual
+      - id: deployment
+        uses: actions/deploy-pages@v4

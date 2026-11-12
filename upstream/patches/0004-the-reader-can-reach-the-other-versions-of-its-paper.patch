@@ -1,0 +1,24 @@
+diff --git a/reader.html b/reader.html
+index 93923dc..fc923c6 100644
+--- a/reader.html
++++ b/reader.html
+@@ -27,6 +27,10 @@
+     background: var(--bar); flex: 0 0 auto; flex-wrap: wrap;
+   }
+   header a.back { color: var(--muted); text-decoration: none; font-size: 1.1rem; }
++  header a.chip {
++    border: 1px solid #8883; background: var(--paper); color: var(--ink);
++    border-radius: 7px; padding: .35rem .7rem; font-size: .78rem; text-decoration: none;
++  }
+   h1 { font-size: .95rem; margin: 0; font-weight: 600; }
+   .state { font-size: .68rem; color: var(--muted); }
+   .state b { color: var(--ink); font-family: ui-monospace, monospace; font-weight: 600; }
+@@ -259,6 +263,8 @@
+   <h1>{name}</h1>
+   <span class="state" id="state">loading</span>
+   <span class="grow"></span>
++  <a class="chip" href="/paper/{pid}/versions"
++     title="This paper as it was, and what changed since">Versions</a>
+   <button id="rebuild" type="button">Rebuild</button>
+   <button class="go" id="finish" type="button">Finish and send</button>
+ </header>

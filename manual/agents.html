@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Working the queue · paperpen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The queue across every paper, and what to do first.">
+<link rel="stylesheet" href="manual.css">
+<header class="top">
+  <a class="mark" href="index.html">paperpen</a>
+  <nav><a href="index.html">What it is</a>
+    <a href="reading.html">Reading a paper</a>
+    <a href="writing.html">Writing it back</a>
+    <a href="network.html">The tablet, over the network</a>
+    <a href="agents.html" class="here">Working the queue</a>
+    <a href="commands.html">Every command</a></nav>
+</header>
+<main>
+<h1>Working the queue</h1>
+<p class="lede">Deciding which paper to work on is not repository work. The
+registry, the shelf and the queue already stand above every repository, and
+these are the commands that read them.</p>
+
+<pre><code>paperpen queue                   # every open note, every paper, oldest first
+paperpen queue --json            # the same, on stdout, with nothing else on it
+paperpen queue --unclassified    # the ones left on AUTO, which is the triage
+paperpen queue --paper X --older-than 14
+paperpen next                    # what to do first, and the command that does it
+paperpen next --all --json       # the whole list, in order</code></pre>
+
+<h2>What <code>next</code> answers</h2>
+<p>Four kinds, never a fifth:</p>
+<table>
+  <tr><th>classify</th><td>Delivered notes have no class. The class decides who
+  acts on a note, so this is the cheapest thing that unblocks the
+  rest.</td></tr>
+  <tr><th>work</th><td>A round is still open. The answer names the round's
+  <code>NOTES.md</code> and how old it is.</td></tr>
+  <tr><th>build</th><td>The source has moved past the build the reader is
+  showing.</td></tr>
+  <tr><th>finish</th><td>A reading is open and unsent. Reported, not urged:
+  whether a round is finished is a judgment about a paper, not arithmetic about
+  notes.</td></tr>
+</table>
+<p>Neither command writes anything, which is what makes them safe to give to
+something that has no business editing a manuscript.</p>
+
+<h2>Acting on one note</h2>
+<p>Every row carries what is needed without opening the paper first: the source
+line, the sentence the note sits on, its age, and for a handwritten note the
+path to its picture.</p>
+<pre><code>{
+  "id": "2026-04-02-07",
+  "paper": "my-manuscript",
+  "tag": "AUTO",
+  "source": "sec_results.tex:41",
+  "anchor": "Above the knee the 48 cells agree closely; below it they scatter.",
+  "ink": "~/papers/manuscript/review/2026-04-02/ink/2026-04-02-07.png",
+  "age": 6,
+  "handwritten": true
+}</code></pre>
+<p>There is no OCR anywhere in this, so a handwritten note is read by whoever
+picks it up, which may be something with no browser, hence the path.</p>
+
+<h2>Two scopes, not two processes</h2>
+<p>The useful split is not how many things are running, it is what each of them
+can reach.</p>
+<ul>
+  <li><b>Above the repositories</b>: the queue, the triage, the ordering, and
+  closing a note. These go through the registry and work from any directory.
+  Nothing here needs a paper's source.</li>
+  <li><b>Inside one repository</b>: reading <code>review/&lt;date&gt;/NOTES.md</code>,
+  changing the LaTeX, rebuilding, committing. One build, one history, one set
+  of co-authors; a mistake reaches one paper.</li>
+</ul>
+<div class="note warn"><b>Check which shelf is in force.</b> A
+<code>.paperpen/papers.json</code> in the current directory wins over the
+global registry. Anything running in such a directory is looking at a different
+shelf, silently. <code>paperpen where</code> says which.</div>
+
+<h2>What a paper's repository should say</h2>
+<p>Whoever works in the paper's own repository, a person or otherwise, needs
+to know three things, and they belong in that repository rather than in
+somebody's head:</p>
+<ol>
+  <li><code>review/&lt;date&gt;/NOTES.md</code> is what to act on. Line numbers
+  are from the build the note was made on and drift as the source is edited;
+  <b>the quoted sentence is what to search for</b>.</li>
+  <li><code>notes.json</code> is the record; <code>NOTES.md</code> is
+  generated from it, so it is never hand-edited.</li>
+  <li>A note is closed with <code>paperpen resolve</code>, with what was done,
+  so the next reading shows what happened to the last one.</li>
+</ol>
+<div class="next"><a href="network.html">&larr; The tablet, over the network</a><a href="commands.html">Every command &rarr;</a></div>
+</main>
+<footer>
+  Read a paper on a tablet, mark it up with a pen, get the marks back where the
+  paper is written. · <a href="index.html">the manual</a> ·
+  by <a href="https://github.com/acorbe">acorbe</a>
+</footer>
+</html>

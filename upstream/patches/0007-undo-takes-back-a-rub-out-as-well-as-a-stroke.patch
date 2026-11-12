@@ -1,0 +1,210 @@
+--- a/reader.html
++++ b/reader.html
+@@ -318,6 +318,8 @@
+   </span>
+   <span class="sep"></span>
+   <button class="tool" id="ink-save" type="button" hidden>Keep the ink as a note</button>
++  <button class="tool" id="ink-undo" type="button" hidden
++          title="Take back the last stroke or rub-out">Undo</button>
+   <button class="tool" id="ink-clear" type="button" hidden>Clear</button>
+   <span class="hint" id="hint">Read: scroll and pinch as usual</span>
+ </div>
+@@ -358,7 +360,7 @@
+       <option value="TODO">todo</option>
+     </select>
+     <span class="pad-acts">
+-      <button id="pad-undo" type="button" title="Undo the last stroke">
++      <button id="pad-undo" type="button" title="Undo the last stroke or rub-out">
+         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+           <path d="M9 7H15a5 5 0 0 1 0 10H8" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round"/>
+@@ -733,6 +735,22 @@
+ // lasts, and it is not drawn from the note as well, or a stroke rubbed out
+ // would still be there underneath.
+ let INK_EDIT = null;
++// What the ink was before each stroke and each rub-out, so undo takes back
++// either. Snapshots of the list rather than of the strokes: a finished stroke
++// is never changed, only added or taken away, so sharing them is safe.
++let INK_UNDO = [];
++const UNDO_DEPTH = 200;
++
++function remember(stack, strokes) {
++  stack.push(strokes.slice());
++  if (stack.length > UNDO_DEPTH) stack.shift();
++}
++
++function showInkButtons(on) {
++  for (const id of ['ink-save', 'ink-undo', 'ink-clear']) {
++    document.getElementById(id).hidden = !on;
++  }
++}
+ 
+ function drawAll() {
+   for (const el of document.querySelectorAll('.page')) {
+@@ -808,6 +826,7 @@
+     const reach = ERASER_R * scaleOf(el);
+     const [kept, changed] = rubOut(PENDING, x, y, reach);
+     if (changed) {
++      remember(INK_UNDO, PENDING);
+       PENDING = kept;
+       // rubbing out all of a note's ink is a change to keep, not a clear
+       if (!PENDING.length && !INK_EDIT) clearInk(); else drawAll();
+@@ -821,6 +840,7 @@
+   e.preventDefault();
+   strokePage = Number(el.dataset.page);
+   stroke = [toPdf(el, e.clientX, e.clientY)];
++  remember(INK_UNDO, PENDING);
+   PENDING.push(stroke);
+   try { el.querySelector('canvas').setPointerCapture(e.pointerId); } catch (err) {}
+ }
+@@ -978,8 +998,7 @@
+   pan = null;
+   if (!stroke) return;
+   stroke = null;
+-  document.getElementById('ink-save').hidden = false;
+-  document.getElementById('ink-clear').hidden = false;
++  showInkButtons(true);
+   drawAll();
+ }
+ 
+@@ -995,9 +1014,9 @@
+ function clearInk() {
+   PENDING = []; strokePage = null; stroke = null;
+   INK_EDIT = null;
+-  document.getElementById('ink-save').hidden = true;
++  INK_UNDO = [];
++  showInkButtons(false);
+   document.getElementById('ink-save').textContent = 'Keep the ink as a note';
+-  document.getElementById('ink-clear').hidden = true;
+   drawAll();
+ }
+ 
+@@ -1055,11 +1074,10 @@
+   INK_EDIT = note;
+   PENDING = (note.ink || []).map(st => st.map(p => [p[0], p[1]]));
+   strokePage = note.page;
++  INK_UNDO = [];                  // undo goes back as far as the note, no further
+   setTool('pen');
+-  const keep = document.getElementById('ink-save');
+-  keep.textContent = 'Keep the changed ink';
+-  keep.hidden = false;
+-  document.getElementById('ink-clear').hidden = false;
++  document.getElementById('ink-save').textContent = 'Keep the changed ink';
++  showInkButtons(true);
+   drawAll();
+   bringIntoView(note);
+   toast('The ink of ' + note.id + ' is live: write to add, rub out to take away', 4000);
+@@ -1301,6 +1319,8 @@
+ let padTarget = null;   // the selection the pad is writing about
+ let PAD_EDIT = null;    // the note whose handwriting the pad holds, if it is one
+ let PAD_WAS = '';       // what that handwriting was, to tell a change from none
++let PAD_UNDO = [];      // HAND before each stroke, rub-out and clear
++let padRubbed = false;  // whether the rub-out under way has taken anything
+ 
+ function padSize() {
+   const box = padCanvas.getBoundingClientRect();
+@@ -1365,6 +1385,7 @@
+   if (!SEL) return;
+   padTarget = SEL;
+   HAND = [];
++  PAD_UNDO = [];
+   PAD_TAG = 'AUTO';
+   document.getElementById('pad-tag').value = PAD_TAG;
+   const what = SEL.kind === 'figure' ? SEL.label
+@@ -1384,6 +1405,7 @@
+   padTarget = null;
+   PAD_EDIT = null;
+   PAD_WAS = '';
++  PAD_UNDO = [];
+   HAND = [];
+   drawAll();
+ }
+@@ -1417,15 +1439,25 @@
+   };
+   penContacts += 1;
+   if (isEraser(e)) {
++    // One rub-out is one step to undo, however much it takes on the way:
++    // remembered as it starts, and forgotten again if it took nothing. A pen
++    // can report a move with its button down just before the down itself, and
++    // that move has already started this one.
++    if (!padErasing) {
++      remember(PAD_UNDO, HAND);
++      padRubbed = false;
++    }
+     padErasing = true;
+     padStroke = null;
+-    const [kept] = rubOut(HAND, e.clientX - box.left, e.clientY - box.top, ERASER_R);
++    const [kept, changed] = rubOut(HAND, e.clientX - box.left, e.clientY - box.top, ERASER_R);
+     HAND = kept;
++    padRubbed = padRubbed || changed;
+     drawPad();
+     grab();
+     return;
+   }
+   padErasing = false;
++  remember(PAD_UNDO, HAND);
+   padStroke = [[e.clientX - box.left, e.clientY - box.top]];
+   HAND.push(padStroke);
+   drawPad();
+@@ -1436,8 +1468,14 @@
+   const box = padCanvas.getBoundingClientRect();
+   if (padErasing || (isEraser(e) && e.buttons)) {
+     e.preventDefault();
++    if (!padErasing) {              // the button pressed in the middle of a stroke
++      padErasing = true;
++      padStroke = null;
++      padRubbed = false;
++      remember(PAD_UNDO, HAND);
++    }
+     const [kept, changed] = rubOut(HAND, e.clientX - box.left, e.clientY - box.top, ERASER_R);
+-    if (changed) { HAND = kept; drawPad(); }
++    if (changed) { HAND = kept; padRubbed = true; drawPad(); }
+     return;
+   }
+   if (!padStroke) return;
+@@ -1445,7 +1483,10 @@
+   if (addPoint(padStroke, e.clientX - box.left, e.clientY - box.top)) drawPad();
+ });
+ for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+-  padCanvas.addEventListener(ev, () => { padStroke = null; padErasing = false; });
++  padCanvas.addEventListener(ev, () => {
++    if (padErasing && !padRubbed) PAD_UNDO.pop();    // it rubbed out nothing
++    padStroke = null; padErasing = false; padRubbed = false;
++  });
+ }
+ 
+ // resized from the corner, both wider and taller: a long note needs room and
+@@ -1610,9 +1651,17 @@
+   }
+   if (!HAND.length || confirm('Discard what you have written?')) closePad();
+ };
+-document.getElementById('pad-undo').onclick = () => { HAND.pop(); drawPad(); };
++document.getElementById('pad-undo').onclick = () => {
++  if (!PAD_UNDO.length) { toast('Nothing to undo'); return; }
++  HAND = PAD_UNDO.pop();
++  drawPad();
++};
+ document.getElementById('pad-clear').onclick = () => {
+-  if (!HAND.length || confirm('Throw this note away?')) { HAND = []; drawPad(); }
++  if (!HAND.length || confirm('Throw this note away?')) {
++    remember(PAD_UNDO, HAND);       // and undo brings it back
++    HAND = [];
++    drawPad();
++  }
+ };
+ document.getElementById('pad-tag').addEventListener('change', (e) => {
+   PAD_TAG = e.target.value;
+@@ -1753,6 +1802,13 @@
+               ink: PENDING, tag: 'AUTO'});
+   }
+ };
++document.getElementById('ink-undo').onclick = () => {
++  if (!INK_UNDO.length) { toast('Nothing to undo'); return; }
++  PENDING = INK_UNDO.pop();
++  // back to no ink at all is the same as never having started, unless it is
++  // a note's ink being changed, where none is an answer to keep
++  if (!PENDING.length && !INK_EDIT) clearInk(); else drawAll();
++};
+ document.getElementById('ink-clear').onclick = () => {
+   const was = INK_EDIT;
+   clearInk();

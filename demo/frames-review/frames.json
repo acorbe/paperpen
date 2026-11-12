@@ -1,0 +1,602 @@
+[
+  {
+    "png": "00.png",
+    "caption": "Your own paper, open in the reader, before anyone else has read it.",
+    "hold": 1.8,
+    "pointer": {
+      "at": [
+        605.0,
+        780
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        619.1,
+        738.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        655.5,
+        629.7
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        705.3,
+        481.7
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        759.5,
+        320.4
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        809.3,
+        172.3
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        845.7,
+        64.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "00.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        859.8,
+        22.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "01.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.8,
+    "pointer": {
+      "at": [
+        859.8,
+        22.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "02.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.45,
+    "pointer": {
+      "at": [
+        859.8,
+        22.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "03.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.45,
+    "pointer": {
+      "at": [
+        859.8,
+        22.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "03.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 1.4,
+    "pointer": {
+      "at": [
+        859.8,
+        22.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "03.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        887.0,
+        22.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "03.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        946.7,
+        22.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "03.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        1006.3,
+        22.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "04.png",
+    "caption": "Review, in the header: say what to look for, or leave it to a general read.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        1033.5,
+        22.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "The agent reads the paper and writes notes of its own, each with the fix it would make.",
+    "hold": 2.6,
+    "pointer": {
+      "at": [
+        1033.5,
+        22.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Open one: what is wrong, the diff that would fix it, and Approve.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        1006.2,
+        46.6
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Open one: what is wrong, the diff that would fix it, and Approve.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        935.9,
+        109.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Open one: what is wrong, the diff that would fix it, and Approve.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        839.7,
+        196.2
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Open one: what is wrong, the diff that would fix it, and Approve.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        735.0,
+        290.4
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Open one: what is wrong, the diff that would fix it, and Approve.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        638.8,
+        376.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Open one: what is wrong, the diff that would fix it, and Approve.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        568.5,
+        440.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "05.png",
+    "caption": "Open one: what is wrong, the diff that would fix it, and Approve.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        541.2,
+        464.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "06.png",
+    "caption": "Open one: what is wrong, the diff that would fix it, and Approve.",
+    "hold": 2.6,
+    "pointer": {
+      "at": [
+        541.2,
+        464.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "06.png",
+    "caption": "Approved, it goes into the LaTeX, and the next proposal opens.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        592.6,
+        470.3
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "07.png",
+    "caption": "Approved, it goes into the LaTeX, and the next proposal opens.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        714.9,
+        484.1
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "07.png",
+    "caption": "Approved, it goes into the LaTeX, and the next proposal opens.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        861.0,
+        500.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "07.png",
+    "caption": "Approved, it goes into the LaTeX, and the next proposal opens.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        983.3,
+        514.2
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "07.png",
+    "caption": "Approved, it goes into the LaTeX, and the next proposal opens.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        1034.6,
+        520.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "08.png",
+    "caption": "Approved, it goes into the LaTeX, and the next proposal opens.",
+    "hold": 2.2,
+    "pointer": {
+      "at": [
+        1034.6,
+        520.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "08.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        980.6,
+        531.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "08.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        851.8,
+        559.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "08.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        698.1,
+        591.9
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "08.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        569.3,
+        619.4
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "09.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        515.3,
+        631.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "10.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 0.45,
+    "pointer": {
+      "at": [
+        515.3,
+        631.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "11.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 0.45,
+    "pointer": {
+      "at": [
+        515.3,
+        631.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "11.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        599.5,
+        631.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "11.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        784.7,
+        631.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "11.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        969.9,
+        631.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "11.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        1054.1,
+        631.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "12.png",
+    "caption": "Not this one: a word why, and Reject. The reason is kept for the next run.",
+    "hold": 2.2,
+    "pointer": {
+      "at": [
+        1054.1,
+        631.0
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "13.png",
+    "caption": "The Fixes page: every proposal in one list, to decide a few at once.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        987.7,
+        589.5
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "13.png",
+    "caption": "The Fixes page: every proposal in one list, to decide a few at once.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        821.6,
+        485.9
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "14.png",
+    "caption": "The Fixes page: every proposal in one list, to decide a few at once.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        605.7,
+        351.2
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "13.png",
+    "caption": "The Fixes page: every proposal in one list, to decide a few at once.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        389.7,
+        216.4
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "13.png",
+    "caption": "The Fixes page: every proposal in one list, to decide a few at once.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        223.6,
+        112.8
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "13.png",
+    "caption": "The Fixes page: every proposal in one list, to decide a few at once.",
+    "hold": 0.055,
+    "pointer": {
+      "at": [
+        157.2,
+        71.3
+      ],
+      "kind": "mouse"
+    }
+  },
+  {
+    "png": "15.png",
+    "caption": "The Fixes page: every proposal in one list, to decide a few at once.",
+    "hold": 2.8,
+    "pointer": {
+      "at": [
+        157.2,
+        71.3
+      ],
+      "kind": "mouse"
+    }
+  }
+]

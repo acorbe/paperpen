@@ -1,0 +1,63 @@
+{
+  "commit": "d6f0347ceceb039fd4046d2eee62d70c09165607",
+  "commit_short": "d6f0347ce",
+  "taken": "2026-09-22T17:56:22",
+  "patches": [
+    "0001-page-count-is-read-before-the-document-is-closed.patch",
+    "0002-the-empty-pad-is-not-the-empty-page.patch",
+    "0003-the-round-says-where-it-went-not-only-whether-it-was-committed.patch",
+    "0004-the-reader-can-reach-the-other-versions-of-its-paper.patch",
+    "0005-the-reader-can-open-the-paper-s-source.patch",
+    "0006-a-note-already-taken-can-have-its-handwriting-and-ink-changed.patch",
+    "0007-undo-takes-back-a-rub-out-as-well-as-a-stroke.patch",
+    "0008-a-single-tap-on-the-text-says-how-to-note-it.patch",
+    "0009-undo-clear-and-zoom-have-icons.patch",
+    "0010-a-pinch-zooms-the-paper-not-the-page.patch",
+    "0011-the-note-can-be-saved-from-under-the-tool-bar.patch",
+    "0012-a-later-delivery-of-the-day-does-not-recrop-earlier-notes.patch",
+    "0013-a-note-offers-its-proposed-fixes-where-it-is-read.patch",
+    "0014-only-what-is-still-waiting-is-drawn-unless-asked.patch",
+    "0015-after-a-fix-is-used-the-next-note-with-one-opens.patch",
+    "0016-the-ipad-a-finger-is-not-a-palm-the-pencil-does-not-scroll.patch",
+    "0017-a-sent-note-says-its-handwriting-stays-not-the-note.patch",
+    "0018-the-agent-and-the-commit-in-the-readers-header.patch",
+    "0019-orderless-search-and-an-occur-list-in-the-reader.patch",
+    "0020-claude-proposes-notes-of-its-own-to-approve-or-reject.patch",
+    "0021-the-agent-may-be-codex-and-the-reader-says-which.patch"
+  ],
+  "files": {
+    "paper.py": {
+      "from": "scripts/paper.py",
+      "sha256": "799c6deec6069557",
+      "lines": 1354
+    },
+    "annotate_paper.py": {
+      "from": "scripts/annotate-paper.py",
+      "sha256": "2d9945dc32f917bf",
+      "lines": 307
+    },
+    "PAPERS.md": {
+      "from": "PAPERS.md",
+      "sha256": "ab12862b14c4b9e2",
+      "lines": 111
+    },
+    "reader.html": {
+      "from": "dashboard.py:PAPER_PAGE",
+      "at": [
+        9581,
+        11277
+      ],
+      "sha256": "325dd76abef8cfd2",
+      "lines": 1696
+    },
+    "routes_dashboard.py": {
+      "from": "dashboard.py:/paper routes",
+      "at": [
+        11280,
+        11466
+      ],
+      "sha256": "35886a82ba368d1b",
+      "lines": 185
+    }
+  }
+}

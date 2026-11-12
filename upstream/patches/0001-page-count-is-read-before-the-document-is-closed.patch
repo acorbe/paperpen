@@ -1,0 +1,17 @@
+diff --git a/paper.py b/paper.py
+index 654074f..8c97c75 100644
+--- a/paper.py
++++ b/paper.py
+@@ -359,9 +359,10 @@ def line_boxes(words: list) -> list[list[float]]:
+ def page_sentences(paper: Paper, page_no: int) -> list[dict]:
+     """The page's text as sentences, each with the boxes it occupies."""
+     doc = pymupdf.open(paper.pdf)
+-    if not 1 <= page_no <= doc.page_count:
++    pages = doc.page_count
++    if not 1 <= page_no <= pages:
+         doc.close()
+-        die(f"page {page_no} is outside 1..{doc.page_count}")
++        die(f"page {page_no} is outside 1..{pages}")
+     words = doc[page_no - 1].get_text("words")
+     doc.close()
+     words.sort(key=lambda w: (w[5], w[6], w[7]))

@@ -1,0 +1,542 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>{{ name }}: feedback · paperpen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="/favicon.svg">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #eef1f5; --paper: #ffffff; --ink: #172b4d; --muted: #5e6c84;
+    --bar: #dfe3ea; --accent: #0079bf; --line: #8883;
+    --SCIENCE: #d9822b; --LANGUAGE: #0079bf; --QUESTION: #6554c0;
+    --TODO: #5e6c84; --AUTO: #97a0af; --claude: #00a3bf;
+    --add: #1f7a4d; --add-bg: #1f7a4d1f; --del: #c0392b; --del-bg: #c0392b1a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12151b; --paper: #262c38; --ink: #e6e9ef; --muted: #9aa3b2; --bar: #1c212b;
+            --add: #57d9a3; --add-bg: #57d9a322; --del: #ff8f73; --del-bg: #ff8f7322; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink);
+         font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif; }
+  header { display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap;
+           padding: .9rem 1rem calc(.9rem) ; background: var(--bar); position: sticky;
+           top: 0; z-index: 5; }
+  header h1 { font-size: 1rem; margin: 0; font-weight: 700; }
+  header .count { font-size: .75rem; color: var(--muted); }
+  header .grow { flex: 1 1 auto; }
+  header a { color: var(--muted); font-size: .75rem; text-decoration: none; }
+  header a:hover { color: var(--accent); }
+
+  .filters { display: flex; gap: .35rem; flex-wrap: wrap; padding: .6rem 1rem;
+             background: var(--bar); border-top: 1px solid var(--line); }
+  .chip { font: inherit; font-size: .72rem; padding: .3rem .7rem; border-radius: 999px;
+          border: 1px solid var(--line); color: var(--muted); background: var(--paper);
+          cursor: pointer; }
+  .chip.on { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
+
+  main { padding: 1rem; max-width: 900px; margin: 0 auto; }
+  .empty { color: var(--muted); text-align: center; padding: 3rem 1rem; line-height: 1.6; }
+  .empty code { font-size: .8rem; }
+
+  /* a note, and what came back for it */
+  .note { background: var(--paper); border-radius: 10px; margin-bottom: 1rem;
+          border-left: 4px solid var(--tag, var(--AUTO));
+          box-shadow: 0 1px 3px rgba(9,30,66,.14); overflow: hidden; }
+  .note.closed { opacity: .72; }
+  .nhead { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+           padding: .6rem .8rem .2rem; font-size: .72rem; color: var(--muted); }
+  .tag { color: #fff; background: var(--tag, var(--AUTO)); border-radius: 4px;
+         padding: .05rem .4rem; font-size: .62rem; letter-spacing: .05em; font-weight: 700; }
+  .nhead .src { font-family: ui-monospace, monospace; }
+  .nhead .grow { flex: 1 1 auto; }
+  .state { font-weight: 600; }
+  .state.done { color: var(--add); }
+  .state.rejected { color: var(--del); }
+  .nbody { padding: .2rem .8rem .6rem; }
+  .anchor { font-size: .8rem; color: var(--muted); border-left: 3px solid var(--line);
+            padding: .15rem .6rem; margin: .3rem 0 .45rem; }
+  .said { font-size: .95rem; line-height: 1.45; }
+  .ink { display: block; max-width: 100%; max-height: 260px; margin: .5rem 0 .2rem;
+         border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  .response { font-size: .75rem; color: var(--add); margin-top: .35rem; }
+
+  .thread { padding: 0 .8rem .4rem; display: flex; flex-direction: column; gap: .35rem; }
+  .msg { max-width: 88%; font-size: .85rem; line-height: 1.4; padding: .45rem .65rem;
+         border-radius: 10px; background: var(--bg); }
+  .msg.you { align-self: flex-end; background: color-mix(in srgb, var(--accent) 14%, var(--paper)); }
+  .msg .who { display: block; font-size: .62rem; color: var(--muted); margin-bottom: .15rem; }
+
+  .fixes { padding: .2rem .8rem .2rem; display: flex; flex-direction: column; gap: .5rem; }
+  .fix { display: flex; gap: .6rem; align-items: flex-start; border: 1px solid var(--line);
+         border-radius: 9px; padding: .6rem .7rem; cursor: pointer; background: var(--paper);
+         touch-action: manipulation; }
+  .fix:hover { border-color: var(--accent); }
+  .fix.picked { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent);
+                background: color-mix(in srgb, var(--accent) 6%, var(--paper)); }
+  .fix.applied, .fix.failed { cursor: default; }
+  .fix.applied { border-color: var(--add); }
+  .fix.failed { border-color: var(--del); }
+  .fix input { width: 1.25rem; height: 1.25rem; margin: .1rem 0 0; flex: 0 0 auto;
+               accent-color: var(--accent); }
+  .fix .what { flex: 1 1 auto; min-width: 0; }
+  .fix .summary { font-weight: 600; font-size: .92rem; }
+  .fix .by { font-size: .66rem; color: var(--muted); margin-left: .35rem; font-weight: 400; }
+  .fix .by.agent { color: var(--claude); }
+  .fix .why { font-size: .78rem; color: var(--muted); margin: .2rem 0 .35rem; }
+  .fix .badge { font-size: .64rem; font-weight: 700; border-radius: 4px; padding: .05rem .35rem;
+                margin-left: .35rem; }
+  .fix .badge.applied { color: #fff; background: var(--add); }
+  .fix .badge.failed { color: #fff; background: var(--del); }
+  .fix .problem { font-size: .74rem; color: var(--del); margin-top: .3rem; }
+  .edit { margin-top: .35rem; }
+  .edit .file { font-family: ui-monospace, monospace; font-size: .66rem; color: var(--muted); }
+  .diff { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .8rem;
+          line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+          background: var(--bg); border-radius: 6px; padding: .4rem .55rem; margin-top: .15rem; }
+  .diff del { color: var(--del); background: var(--del-bg); text-decoration: line-through; }
+  .diff ins { color: var(--add); background: var(--add-bg); text-decoration: none; }
+
+  .act { display: flex; gap: .5rem; align-items: flex-start; flex-wrap: wrap;
+         padding: .5rem .8rem .8rem; border-top: 1px solid var(--line); margin-top: .5rem; }
+  .act textarea { flex: 1 1 16rem; min-height: 2.6rem; font: inherit; font-size: .85rem;
+                  border: 1px solid var(--line); border-radius: 8px; padding: .45rem .55rem;
+                  background: var(--bg); color: var(--ink); resize: vertical; }
+  .act .buttons { display: flex; gap: .4rem; flex-wrap: wrap; }
+  button.b { font: inherit; font-size: .82rem; border: 1px solid var(--line); border-radius: 8px;
+             padding: .5rem .9rem; background: var(--bg); color: var(--ink); cursor: pointer;
+             touch-action: manipulation; }
+  button.b.go { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+  button.b[disabled] { opacity: .45; cursor: default; }
+
+  #toast { position: fixed; left: 50%; bottom: calc(1.2rem + env(safe-area-inset-bottom));
+           transform: translateX(-50%); background: #172b4d; color: #fff; z-index: 40;
+           padding: .5rem 1rem; border-radius: 999px; font-size: .8rem; max-width: 92vw;
+           text-align: center; }
+  #toast a { color: #9fd3ff; }
+  /* the agent's own notes: its colour on the edge, and a box to take it into a selection */
+  .note.proposal { border-left-color: var(--claude); }
+  .nhead .by-agent { color: var(--claude); font-weight: 600; }
+  .nhead input.select { width: 1.15rem; height: 1.15rem; margin: 0; accent-color: var(--claude); }
+  button.b.no { color: var(--del); border-color: color-mix(in srgb, var(--del) 45%, transparent); }
+  .batch { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; padding: .55rem 1rem;
+           background: color-mix(in srgb, var(--claude) 12%, var(--bar));
+           border-top: 1px solid var(--line); position: sticky; top: 3rem; z-index: 4; }
+  .batch[hidden] { display: none; }
+  .batch .n { font-size: .8rem; font-weight: 600; }
+  .batch input[type=text] { flex: 1 1 12rem; min-width: 0; font: inherit; font-size: .8rem;
+                            border: 1px solid var(--line); border-radius: 8px; padding: .4rem .55rem;
+                            background: var(--paper); color: var(--ink); }
+  .find-list { font: inherit; font-size: .78rem; border: 1px solid var(--line); border-radius: 999px;
+               padding: .28rem .8rem; background: var(--paper); color: var(--ink); min-width: 0;
+               flex: 0 1 16rem; }
+</style>
+
+<header>
+  <a href="/paper/{{ pid }}" title="Back to the reader">&larr;</a>
+  <h1>{{ name }}</h1>
+  <span class="count" id="count"></span>
+  <span class="grow"></span>
+  <a href="/paper/{{ pid }}/versions" title="What the working tree now says, against the last commit">versions</a>
+  <a href="/queue">the queue</a>
+  <a href="/">the shelf</a>
+</header>
+<div class="filters">
+  <button class="chip on" type="button" data-show="choose">to choose</button>
+  <button class="chip" type="button" data-show="agent"
+          title="The agent's own notes, still to approve or reject">the agent's proposals</button>
+  <button class="chip" type="button" data-show="all">all</button>
+  <input class="find-list" id="find-fix" type="search" autocomplete="off"
+         placeholder="find (/)" title="words in any order, !word to leave one out">
+</div>
+<div class="batch" id="batch" hidden>
+  <span class="n" id="batch-n"></span>
+  <button class="b go" type="button" id="batch-yes"
+          title="Put in each one's fix and close it; one with two fixes is left for you to choose">Approve</button>
+  <input type="text" id="batch-why" placeholder="why not, if you reject them (optional)">
+  <button class="b no" type="button" id="batch-no">Reject</button>
+  <button class="b" type="button" id="batch-all" title="Take every proposal on show into the selection">all shown</button>
+  <button class="b" type="button" id="batch-none">none</button>
+</div>
+<main id="list"><div class="empty">reading…</div></main>
+<div id="toast" hidden></div>
+
+<script src="/orderless.js"></script>
+<script>
+const PID = {{ pid|tojson }};
+const IS_PDF = {{ is_pdf|tojson }};
+const el = id => document.getElementById(id);
+let ITEMS = [], SHOW = 'choose', SHOWN = [];
+const PICKED = {};               // note id -> Set of fix ids
+const CHOSEN = new Set();        // the agent's notes taken into a selection, to decide at once
+const AGENTS = new Set({{ agents|tojson }});   // who writes notes of their own: claude, codex
+
+function make(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+let toastTimer = null;
+function toast(html, ms) {
+  const box = el('toast');
+  box.innerHTML = html;
+  box.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { box.hidden = true; }, ms || 3200);
+}
+
+function escaped(text) {
+  const box = document.createElement('div');
+  box.textContent = text == null ? '' : text;
+  return box.innerHTML;
+}
+
+async function ask(url, options) {
+  const answer = await fetch(url, options);
+  let data = {};
+  try { data = await answer.json(); } catch (e) { data = {}; }
+  if (!answer.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + answer.status));
+  return data;
+}
+
+function post(url, body) {
+  return ask(url, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                   body: JSON.stringify(body)});
+}
+
+// --- what a fix changes, word by word --------------------------------------
+//
+// The longest common run of words between the old and the new, then read as
+// changes rather than as tokens: each stretch of change is shown whole, what
+// goes struck through and then what comes in, and a match too small to stand
+// on its own between two changes (a space, a comma, an "a") is folded into
+// them. Otherwise a rewritten phrase reads as its words interleaved, "squareit
+// metre,has", which is the alignment being right and the picture being wrong.
+
+function words(text) { return text.split(/(\s+)/).filter(s => s.length); }
+
+function align(a, b) {
+  const n = a.length, m = b.length;
+  const L = Array.from({length: n + 1}, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    }
+  }
+  const parts = [];                        // {same} or {del, ins}
+  const add = (key, s) => {
+    const last = parts[parts.length - 1];
+    if (key === 'same') {
+      if (last && 'same' in last) last.same += s; else parts.push({same: s});
+    } else {
+      if (last && !('same' in last)) last[key] += s;
+      else parts.push(key === 'del' ? {del: s, ins: ''} : {del: '', ins: s});
+    }
+  };
+  let i = 0, j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) { add('same', a[i]); i++; j++; }
+    else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) { add('ins', b[j]); j++; }
+    else { add('del', a[i]); i++; }
+  }
+  return parts;
+}
+
+// a match between two changes that carries no meaning of its own
+function slight(text) {
+  const t = text.trim();
+  return !t || (t.split(/\s+/).length === 1 && t.length <= 3);
+}
+
+function tidy(parts) {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let k = 1; k + 1 < parts.length; k++) {
+      const [before, mid, after] = [parts[k - 1], parts[k], parts[k + 1]];
+      if ('same' in mid && !('same' in before) && !('same' in after) && slight(mid.same)) {
+        parts.splice(k - 1, 3, {del: before.del + mid.same + after.del,
+                                ins: before.ins + mid.same + after.ins});
+        changed = true;
+        break;
+      }
+    }
+  }
+  return parts;
+}
+
+function diff(old, neu) {
+  const a = words(old), b = words(neu);
+  const box = make('div', 'diff');
+  if (a.length * b.length > 250000) {          // too long to line up: say both
+    box.append(make('del', '', old), document.createTextNode('\n'), make('ins', '', neu));
+    return box;
+  }
+  for (const part of tidy(align(a, b))) {
+    if ('same' in part) { box.append(document.createTextNode(part.same)); continue; }
+    // the spaces at the edges of a change belong to the text around it
+    const lead = (part.del || part.ins).match(/^\s*/)[0];
+    if (lead) box.append(document.createTextNode(lead));
+    const gone = part.del.trim(), come = part.ins.trim();
+    if (gone) box.append(make('del', '', gone));
+    if (gone && come) box.append(document.createTextNode(' '));
+    if (come) box.append(make('ins', '', come));
+    const trail = (part.del || part.ins).match(/\s*$/)[0];
+    if (trail) box.append(document.createTextNode(trail));
+  }
+  return box;
+}
+
+// --- one note --------------------------------------------------------------
+
+function waiting(item) {
+  return item.status === 'open' && item.fixes.some(f => f.state === 'proposed');
+}
+
+function proposal(item) { return AGENTS.has(item.by); }
+
+function drawNote(item) {
+  const card = make('section', 'note' + (item.status === 'open' ? '' : ' closed')
+                    + (proposal(item) ? ' proposal' : ''));
+  card.style.setProperty('--tag', 'var(--' + item.tag + ')');
+  const picked = PICKED[item.id] || (PICKED[item.id] = new Set());
+
+  const head = make('div', 'nhead');
+  if (proposal(item) && item.status === 'open') {
+    const pick = make('input', 'select');
+    pick.type = 'checkbox';
+    pick.title = 'take it into the selection, to approve or reject with others';
+    pick.checked = CHOSEN.has(item.id);
+    pick.onchange = () => { pick.checked ? CHOSEN.add(item.id) : CHOSEN.delete(item.id); showBatch(); };
+    head.append(pick);
+  }
+  if (proposal(item)) head.append(make('span', 'by-agent', item.by + ' proposes'));
+  head.append(make('span', 'tag', item.tag.toLowerCase()),
+              make('span', 'src', item.source || ('page ' + item.page)),
+              make('span', '', 'round ' + item.session + ' · ' + item.id),
+              make('span', 'grow'),
+              make('span', 'state ' + item.status, item.status === 'open' ? 'open' : item.status));
+  const body = make('div', 'nbody');
+  if (item.anchor) body.append(make('div', 'anchor', item.anchor));
+  body.append(make('div', 'said', item.text));
+  if (item.handwritten) {
+    const img = make('img', 'ink');
+    img.alt = 'what was written';
+    img.loading = 'lazy';
+    img.src = '/paper/' + PID + '/ink/' + encodeURIComponent(item.session) + '/'
+      + encodeURIComponent(item.id) + '.png';
+    img.onerror = () => img.remove();
+    body.append(img);
+  }
+  if (item.response) body.append(make('div', 'response', item.response));
+  card.append(head, body);
+
+  if (item.thread.length) {
+    const thread = make('div', 'thread');
+    for (const said of item.thread) {
+      const msg = make('div', 'msg' + (said.by === 'you' ? ' you' : ''));
+      msg.append(make('span', 'who', said.by + ' · ' + (said.at || '').replace('T', ' ').slice(0, 16)),
+                 document.createTextNode(said.text));
+      thread.append(msg);
+    }
+    card.append(thread);
+  }
+
+  const fixes = make('div', 'fixes');
+  for (const fix of item.fixes) {
+    const open = fix.state === 'proposed' && item.status === 'open';
+    const row = make('label', 'fix ' + fix.state + (picked.has(fix.id) ? ' picked' : ''));
+    const box = make('input');
+    box.type = 'checkbox';
+    box.checked = picked.has(fix.id) || fix.state === 'applied';
+    box.disabled = !open;
+    box.onchange = () => {
+      box.checked ? picked.add(fix.id) : picked.delete(fix.id);
+      row.classList.toggle('picked', box.checked);
+      updateApply(card, item);
+    };
+    const what = make('div', 'what');
+    const title = make('div', 'summary', fix.id + '. ' + fix.summary);
+    title.append(make('span', 'by' + (AGENTS.has(fix.by) ? ' agent' : ''), fix.by));
+    if (fix.state === 'applied') title.append(make('span', 'badge applied', 'applied'));
+    if (fix.state === 'failed') title.append(make('span', 'badge failed', 'did not apply'));
+    what.append(title);
+    if (fix.why) what.append(make('div', 'why', fix.why));
+    for (const e of fix.edits) {
+      const part = make('div', 'edit');
+      part.append(make('div', 'file', e.file), diff(e.old, e.new));
+      what.append(part);
+    }
+    if (fix.problem) what.append(make('div', 'problem', fix.problem));
+    row.append(box, what);
+    fixes.append(row);
+  }
+  if (item.fixes.length) card.append(fixes);
+
+  if (item.status === 'open') {
+    const act = make('div', 'act');
+    const text = make('textarea');
+    text.placeholder = 'Reply: a further note, a question, or which way to go';
+    const buttons = make('div', 'buttons');
+    const apply = make('button', 'b go apply', 'Apply selected');
+    apply.type = 'button';
+    apply.onclick = () => applyFixes(item, apply);
+    const reply = make('button', 'b', 'Reply');
+    reply.type = 'button';
+    reply.onclick = () => sendReply(item, text, reply);
+    buttons.append(apply, reply);
+    if (proposal(item)) {
+      text.placeholder = 'Why not, if you reject it; or a reply';
+      const no = make('button', 'b no', 'Reject');
+      no.type = 'button';
+      no.title = 'close it as rejected; what is written beside it is kept as the reason';
+      no.onclick = () => decide([item.id], 'reject', text.value, no);
+      buttons.append(no);
+    }
+    act.append(text, buttons);
+    card.append(act);
+    updateApply(card, item);
+  }
+  return card;
+}
+
+function updateApply(card, item) {
+  const button = card.querySelector('button.apply');
+  if (!button) return;
+  const n = (PICKED[item.id] || new Set()).size;
+  button.disabled = !n;
+  button.textContent = n ? 'Apply ' + n + ' fix' + (n === 1 ? '' : 'es') : 'Apply selected';
+}
+
+// --- the list --------------------------------------------------------------
+
+function draw() {
+  const box = el('list');
+  box.innerHTML = '';
+  const pieces = Orderless.parse(el('find-fix').value);
+  const said = item => [item.text, item.anchor, item.source, item.tag,
+                        ...item.fixes.map(f => f.summary + ' ' + (f.why || '')),
+                        ...item.thread.map(m => m.text)].join(' ');
+  const shown = (SHOW === 'all' ? ITEMS
+                 : SHOW === 'agent' ? ITEMS.filter(i => proposal(i) && i.status === 'open')
+                 : ITEMS.filter(i => waiting(i) || (proposal(i) && i.status === 'open')))
+    .filter(item => !pieces.length || Orderless.matches(pieces, said(item)));
+  SHOWN = shown;
+  showBatch();
+  const choose = ITEMS.filter(waiting).length;
+  el('count').textContent = choose
+    ? choose + ' note' + (choose === 1 ? '' : 's') + ' with fixes to choose'
+    : (ITEMS.length ? 'nothing to choose' : '');
+  if (!shown.length) {
+    const said = make('div', 'empty');
+    said.innerHTML = IS_PDF
+      ? 'This paper was delivered as a PDF, so its fixes are made by whoever wrote it.'
+      : ITEMS.length
+        ? 'Nothing waiting to be chosen. <b>all</b> shows what was answered.'
+        : 'No feedback yet. After Finish and send, whoever answers the round proposes '
+          + 'fixes with <code>paperpen propose</code>, and they appear here to choose from.';
+    box.append(said);
+    return;
+  }
+  for (const item of shown) box.append(drawNote(item));
+}
+
+async function load() {
+  try {
+    ITEMS = (await ask('/paper/' + PID + '/feedback.json')).items;
+    draw();
+  } catch (err) {
+    el('list').innerHTML = '<div class="empty">' + escaped(err.message) + '</div>';
+  }
+}
+
+async function applyFixes(item, button) {
+  const fixes = [...(PICKED[item.id] || [])];
+  if (!fixes.length) return;
+  button.disabled = true;
+  try {
+    const done = await post('/paper/' + PID + '/feedback/apply', {note: item.id, fixes: fixes});
+    PICKED[item.id] = new Set();
+    const failed = Object.keys(done.failed || {});
+    toast(failed.length
+      ? escaped('Fix ' + failed.join(', ') + ' did not apply: the text it replaces has moved. '
+                + 'The note stays open.')
+      : escaped('Applied, and the note is closed. Nothing is committed: ')
+        + '<a href="/paper/' + encodeURIComponent(PID) + '/versions">see what changed</a>', 6000);
+    await load();
+  } catch (err) {
+    toast(escaped('Not applied: ' + err.message), 6000);
+    button.disabled = false;
+  }
+}
+
+async function sendReply(item, text, button) {
+  if (!text.value.trim()) { text.focus(); return; }
+  button.disabled = true;
+  try {
+    await post('/paper/' + PID + '/feedback/reply', {note: item.id, text: text.value});
+    toast('Said. The note stays open for whoever answers next.');
+    await load();
+  } catch (err) {
+    toast(escaped('Not sent: ' + err.message), 6000);
+    button.disabled = false;
+  }
+}
+
+// --- a selection of the agent's notes, decided at once ------------------------
+function showBatch() {
+  const open = new Set(ITEMS.filter(i => proposal(i) && i.status === 'open').map(i => i.id));
+  for (const id of [...CHOSEN]) if (!open.has(id)) CHOSEN.delete(id);
+  el('batch').hidden = !open.size;
+  el('batch-n').textContent = CHOSEN.size ? CHOSEN.size + ' selected'
+    : open.size + ' proposal' + (open.size === 1 ? '' : 's') + ' from '
+      + [...new Set(ITEMS.filter(i => proposal(i) && i.status === 'open').map(i => i.by))].join(' and ')
+      + ': tick some to decide at once';
+  el('batch-yes').disabled = el('batch-no').disabled = !CHOSEN.size;
+}
+
+async function decide(ids, what, why, button) {
+  if (!ids.length) return;
+  button.disabled = true;
+  try {
+    const done = await post('/paper/' + PID + '/proposals/decide', {notes: ids, what: what, why: why});
+    const failed = Object.entries(done.failed || {});
+    for (const id of done.done) CHOSEN.delete(id);
+    const word = what === 'approve' ? 'approved' : 'rejected';
+    toast(escaped(done.done.length + ' ' + word + '.'
+                  + (failed.length ? ' Left open: ' + failed.map(([id, why]) => id + ' (' + why + ')').join('; ')
+                                   : ''))
+          + (what === 'approve' && done.done.length
+             ? ' Nothing is committed: <a href="/paper/' + encodeURIComponent(PID)
+               + '/versions">see what changed</a>' : ''), failed.length ? 9000 : 5000);
+    el('batch-why').value = '';
+    await load();
+  } catch (err) {
+    toast(escaped('Not done: ' + err.message), 6000);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+el('batch-yes').onclick = (e) => decide([...CHOSEN], 'approve', '', e.target);
+el('batch-no').onclick = (e) => decide([...CHOSEN], 'reject', el('batch-why').value, e.target);
+el('batch-all').onclick = () => {
+  for (const i of SHOWN) if (proposal(i) && i.status === 'open') CHOSEN.add(i.id);
+  draw();
+};
+el('batch-none').onclick = () => { CHOSEN.clear(); draw(); };
+
+Orderless.filter(el('find-fix'), () => [], () => draw());
+
+for (const chip of document.querySelectorAll('.chip')) {
+  chip.onclick = () => {
+    SHOW = chip.dataset.show;
+    for (const c of document.querySelectorAll('.chip')) c.classList.toggle('on', c === chip);
+    draw();
+  };
+}
+load();
+</script>

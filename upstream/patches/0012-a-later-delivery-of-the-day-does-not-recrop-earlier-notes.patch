@@ -1,0 +1,40 @@
+diff --git a/paper.py b/paper.py
+index 8c97c75..2673c58 100644
+--- a/paper.py
++++ b/paper.py
+@@ -961,10 +961,17 @@ def notes_md(paper: Paper, notes: list[dict], info: dict, session: str) -> str:
+     return "\n".join(lines).rstrip() + "\n"
+ 
+ 
+-def write_review(paper: Paper, notes: list[dict], session: str, info: dict) -> Path:
++def write_review(paper: Paper, notes: list[dict], session: str, info: dict,
++                 fresh: set | None = None) -> Path:
+     out = paper.review / session
+     out.mkdir(parents=True, exist_ok=True)
+     for n in notes:
++        # with `fresh` given, a note from an earlier delivery of the day keeps
++        # the image it was cropped with: it was made on another build, whose
++        # page may have moved or be gone from the current one
++        if fresh is not None and n["id"] not in fresh \
++                and (out / "ink" / f"{n['id']}.png").exists():
++            continue
+         if n.get("ink") or n.get("hand"):
+             ink_crop(paper, n, out / "ink" / f"{n['id']}.png")
+     (out / "notes.json").write_text(
+@@ -983,6 +990,7 @@ def cmd_export(paper: Paper, commit: bool = True) -> dict:
+     if not paper.repo.is_dir():
+         die(f"no such repo: {paper.repo}")
+     session = date.today().isoformat()
++    fresh = {n["id"] for n in notes}
+     # a second session on one day joins the first rather than overwriting it
+     existing = paper.review / session / "notes.json"
+     if existing.is_file():
+@@ -993,7 +1001,7 @@ def cmd_export(paper: Paper, commit: bool = True) -> dict:
+         seen = {n["id"] for n in notes}
+         notes = [n for n in was if n["id"] not in seen] + notes
+         notes.sort(key=lambda n: (n.get("page", 0), n.get("rect", [0, 0])[1]))
+-    out = write_review(paper, notes, session, build_info(paper))
++    out = write_review(paper, notes, session, build_info(paper), fresh=fresh)
+     result = {"written": str(out), "notes": len(notes), "committed": False}
+     if commit and (paper.repo / ".git").exists():
+         rel = str(out.relative_to(paper.repo))

@@ -1,0 +1,44 @@
+diff --git a/reader.html b/reader.html
+index 0a3ad24..1a55177 100644
+--- a/reader.html
++++ b/reader.html
+@@ -1486,13 +1486,36 @@ function useFix(note, fix, button) {
+       const failed = Object.values(data.failed || {});
+       if (failed.length) throw new Error(failed[0]);
+       const files = [...new Set((fix.edits || []).map(e => e.file))].join(', ');
+-      closeSheet();
+-      load();
+-      toast('Put into ' + files + ', and the note is closed. Rebuild to read it.', 5000);
++      // straight on to the next note with a fix to choose, in the order they
++      // sit on the pages, so a round of proposals is worked through without
++      // hunting for the next ring on the page
++      return load().then(() => {
++        const next = nextWithFixes(note);
++        if (next) {
++          openNote(next);
++          bringIntoView(next);
++          toast('Put into ' + files + '. Next: ' + (next.source && next.source.file
++            ? next.source.file + ':' + next.source.line : 'page ' + next.page), 3500);
++        } else {
++          closeSheet();
++          toast('Put into ' + files + '. That was the last fix to choose. '
++                + 'Rebuild to read the paper as it is now.', 6000);
++        }
++      });
+     })
+     .catch(err => { toast('Not applied: ' + err.message, 6000); button.disabled = false; load(); });
+ }
+ 
++// the first note after this one, by page and position, with a fix waiting;
++// from the top again if there is none further down
++function nextWithFixes(after) {
++  const list = notesInOrder().filter(n => n.id !== after.id && waitingFixes(n).length);
++  const key = n => [n.page, (n.rect && n.rect[1]) || 0];
++  const [p0, y0] = key(after);
++  return list.find(n => { const [p, y] = key(n); return p > p0 || (p === p0 && y > y0); })
++    || list[0] || null;
++}
++
+ function replyTo(note, input, button) {
+   if (!input.value.trim()) { input.focus(); return; }
+   button.disabled = true;

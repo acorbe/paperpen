@@ -1,0 +1,101 @@
+--- a/reader.html
++++ b/reader.html
+@@ -117,6 +117,15 @@
+     padding: .8rem .9rem calc(.9rem + env(safe-area-inset-bottom)); max-height: 82vh; overflow: auto;
+   }
+   #sheet[hidden] { display: none; }
++  /* the panel's Save, again, where the hand already is: under the tool bar */
++  #quick-save {
++    position: fixed; z-index: 31; border: 0; border-radius: 8px;
++    background: var(--accent); color: #fff; font: inherit; font-size: .85rem;
++    font-weight: 600; padding: .5rem 1.1rem; cursor: pointer; touch-action: manipulation;
++    box-shadow: 0 3px 12px rgba(9,30,66,.35);
++  }
++  #quick-save[hidden] { display: none; }
++  #quick-save[disabled] { opacity: .5; }
+   .sheet-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+   .sheet-head .where { font-size: .7rem; color: var(--muted); font-family: ui-monospace, monospace; }
+   /* stepping through the notes on a paper, in the order they sit on the pages */
+@@ -438,6 +447,8 @@
+   </div>
+ </div>
+ 
++<button id="quick-save" type="button" hidden title="Keep this note">Save</button>
++
+ <div id="toast" hidden></div>
+ 
+ <script>
+@@ -1141,6 +1152,12 @@
+   document.getElementById('sheet-redo-said').textContent = canChange ? ''
+     : 'Sent with an earlier round, so it stays as it was sent.';
+   document.getElementById('sheet').hidden = false;
++  // The panel comes up from the bottom and its Save is at the foot of it,
++  // which after Keep the ink as a note is the far end of the screen from the
++  // hand that pressed it. So the same Save is also put just under the bar.
++  document.getElementById('quick-save').hidden = !!note.claude
++    || !!(note.id && !changeable(note));
++  placeQuickSave();
+   showNav(note);
+   showHand(note);
+   if (!note.claude && !(note.hand && note.hand.length)) {
+@@ -1263,7 +1280,22 @@
+   host.scrollTo({top: Math.max(0, y - host.clientHeight / 3), behavior: 'smooth'});
+ }
+ 
++// under the button that was pressed when it is on show, the ink's Keep;
++// otherwise under the right-hand end of the bar
++function placeQuickSave() {
++  const quick = document.getElementById('quick-save');
++  if (quick.hidden) return;
++  const bar = document.querySelector('.tools').getBoundingClientRect();
++  const keep = document.getElementById('ink-save');
++  const under = keep.hidden ? null : keep.getBoundingClientRect();
++  const w = quick.offsetWidth || 90;
++  const left = under ? under.left + (under.width - w) / 2 : bar.right - w - 12;
++  quick.style.top = (bar.bottom + 8) + 'px';
++  quick.style.left = Math.max(8, Math.min(left, window.innerWidth - w - 8)) + 'px';
++}
++
+ function closeSheet() {
++  document.getElementById('quick-save').hidden = true;
+   document.getElementById('sheet').hidden = true;
+   EDIT = null;
+   SEL = null;
+@@ -1311,6 +1343,7 @@
+     toast('Write something, or keep some ink'); return;
+   }
+   document.getElementById('sheet-save').disabled = true;
++  document.getElementById('quick-save').disabled = true;
+   postJSON('/paper/' + PID + '/note', body)
+     .then(data => {
+       if (!data.ok) throw new Error(data.error || 'unknown error');
+@@ -1319,7 +1352,10 @@
+         ? data.note.source.file + ':' + data.note.source.line : 'page ' + data.note.page));
+     })
+     .catch(err => toast('Not saved: ' + err.message, 5000))
+-    .finally(() => { document.getElementById('sheet-save').disabled = false; });
++    .finally(() => {
++      document.getElementById('sheet-save').disabled = false;
++      document.getElementById('quick-save').disabled = false;
++    });
+ }
+ 
+ // --- the writing pad --------------------------------------------------
+@@ -1622,7 +1658,7 @@
+   heldFired = false;
+   cancelHold();
+   cancelTapHint();          // a second tap is on its way, or something else is
+-  if (e.target.closest('#pad, #sheet, .tools, header')) return;
++  if (e.target.closest('#pad, #sheet, #quick-save, .tools, header')) return;
+   if (e.pointerType === 'pen' || isPalm(e)) return;
+   tapFrom = {x: e.clientX, y: e.clientY, at: Date.now(), target: e.target};
+   // Holding still is the same as tapping twice. Two taps are quick when you
+@@ -1817,6 +1853,8 @@
+ 
+ document.getElementById('sheet-cancel').onclick = sheetGuard;
+ document.getElementById('sheet-save').onclick = saveNote;
++document.getElementById('quick-save').onclick = saveNote;
++window.addEventListener('resize', placeQuickSave);
+ document.getElementById('sheet-close').onclick = sheetGuard;
+ document.getElementById('sheet-prev').onclick = () => stepNote(-1);
+ document.getElementById('sheet-next').onclick = () => stepNote(1);
