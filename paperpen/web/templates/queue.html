@@ -62,7 +62,7 @@
 </style>
 
 <header>
-  <h1>the queue</h1>
+  {% with name = "the queue" %}{% include "_byline.html" %}{% endwith %}
   <span class="count">{{ tally.total }} open across {{ tally.papers }} paper{{ '' if tally.papers == 1 else 's' }}{% for a, n in tally.agents.items() %}, {{ n }} from {{ a }}{% endfor %}</span>
   <span class="grow"></span>
   <a href="/">&larr; the shelf</a>

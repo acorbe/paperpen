@@ -7,7 +7,7 @@ and an agent (Claude Code or Codex) that reads the paper and writes its own.
 
 This file says what the app is for, why it is built the way it is, and what is
 not built yet. The commands and screens are in the [README](README.md), the
-[docs](docs/) and the [manual](https://acorbe.github.io/paperpen/).
+[docs](docs/) and the [manual](manual/).
 
 The reader comes from a personal dashboard of the author's, where it is in
 daily use. It is taken as it is, not rewritten, for the reason in "Staying in
