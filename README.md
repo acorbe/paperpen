@@ -5,14 +5,8 @@ by [acorbe](https://github.com/acorbe)
 [![Support me on Ko-fi](https://img.shields.io/badge/Support%20me%20on-Ko--fi-72a4f2?style=for-the-badge&logo=kofi&logoColor=white)](https://ko-fi.com/V3Y22788IC)
 [![MIT licence](https://img.shields.io/badge/licence-MIT-2ea44f?style=for-the-badge)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab?style=for-the-badge&logo=python&logoColor=white)](pyproject.toml)
-[![tests: GitHub Actions](https://img.shields.io/badge/tests-GitHub%20Actions-2088ff?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/acorbe/paperpen/actions/workflows/tests.yml)
-[![manual: in the repository](https://img.shields.io/badge/manual-in%20the%20repository-555555?style=for-the-badge)](manual/)
-<!-- The badges are static on purpose. While the repository is private,
-shields.io cannot read the Actions status (it answers "repo or workflow not
-found"), and the manual is online only once GitHub Pages is on. Once both are
-true, the tests badge can become
-https://img.shields.io/github/actions/workflow/status/acorbe/paperpen/tests.yml?branch=main&style=for-the-badge&label=tests
-and the manual badge can say "online" and link https://acorbe.github.io/paperpen/ -->
+[![tests](https://img.shields.io/github/actions/workflow/status/acorbe/paperpen/tests.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/acorbe/paperpen/actions/workflows/tests.yml)
+[![manual: online](https://img.shields.io/badge/manual-online-555555?style=for-the-badge)](https://acorbe.github.io/paperpen/)
 
 Read a paper on a tablet, mark it up with a pen, and get the marks back as
 something you can act on: a note anchored to the line of LaTeX that made the
@@ -20,9 +14,9 @@ sentence, or a marked-up PDF to send to whoever wrote the paper.
 
 ![what it does](demo/paperpen.gif)
 
-The manual, with pictures of every screen, is the site in [`manual/`](manual/):
-open `manual/index.html` from the checkout. It goes online at
-https://acorbe.github.io/paperpen/ once GitHub Pages is on.
+The manual, with pictures of every screen, is online at
+https://acorbe.github.io/paperpen/, and is the site in [`manual/`](manual/) of the
+checkout (open `manual/index.html`).
 
 ## Quick start
 
@@ -192,7 +186,7 @@ Not yet: handwriting transcribed to text. `DESIGN.md` says what it will be.
   the code comes from
 - [the manual](manual/), the same ground for a reader rather than a
   developer, a site to open from the checkout (`manual/index.html`); online at
-  https://acorbe.github.io/paperpen/ once GitHub Pages is on
+  https://acorbe.github.io/paperpen/
 - [DESIGN.md](DESIGN.md), what it is for and what it will be
 
 ## Licence
